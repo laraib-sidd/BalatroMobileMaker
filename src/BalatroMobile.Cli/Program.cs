@@ -2,6 +2,7 @@ using BalatroMobile.Configuration.Services;
 using BalatroMobile.Core.Models;
 using BalatroMobile.Core.Services;
 using BalatroMobile.Core.Services.GameDetection;
+using BalatroMobile.Infrastructure.Logging;
 using BalatroMobile.Infrastructure.Tools;
 
 namespace BalatroMobile.Cli;
@@ -126,9 +127,19 @@ internal class Program
                 OutputPath = outputPath
             };
 
+            // Initialize comprehensive logger
+            using var logger = new BuildLogger();
+            var buildStartTime = DateTime.Now;
+            
             Console.WriteLine("BalatroMobile Build");
             Console.WriteLine("======================");
+            Console.WriteLine($"Log file: {logger.LogFilePath}");
             Console.WriteLine();
+            
+            // Log system information
+            logger.LogSystemInfo();
+            logger.LogEnvironmentVariables();
+            
             Console.WriteLine($"Platform: {config.Platform}");
             Console.WriteLine($"FPS Cap: {config.FpsCap}");
             Console.WriteLine($"Landscape: {config.EnableLandscape}");
@@ -137,53 +148,184 @@ internal class Program
             Console.WriteLine($"Inject Mods: {config.InjectMods}");
             Console.WriteLine($"Output: {config.OutputPath}");
             Console.WriteLine();
+            
+            // Log build configuration
+            logger.LogBuildConfig(
+                config.Platform.ToString(),
+                config.FpsCap.ToString(),
+                config.EnableLandscape,
+                config.EnableHighDpi,
+                config.DisableCrtShader,
+                config.InjectMods,
+                config.OutputPath);
 
             // Initialize tools manager (handles auto-downloading of required tools)
             Console.WriteLine("Checking required tools...");
-            var toolsManager = new ToolsManager(msg => Console.WriteLine($"  {msg}"));
+            logger.LogInfo("Initializing ToolsManager...");
+            var toolsManager = new ToolsManager(msg => {
+                Console.WriteLine($"  {msg}");
+                logger.LogInfo($"ToolsManager: {msg}");
+            });
+            
+            // Log tool paths
+            logger.LogToolPaths(
+                toolsManager.GetJavaExecutablePath(),
+                toolsManager.ApkToolPath,
+                toolsManager.UberApkSignerPath,
+                toolsManager.Love2dApkPath,
+                toolsManager.ToolsDirectory);
+            
+            // Log tools directory contents
+            logger.LogDirectoryContents(toolsManager.ToolsDirectory, "Tools Directory");
+            
+            // Check if JDK folder exists and log its contents
+            var jdkDir = Path.Combine(toolsManager.ToolsDirectory, "jdk");
+            if (Directory.Exists(jdkDir))
+            {
+                logger.LogDirectoryContents(jdkDir, "JDK Directory");
+                var jdkBinDir = Path.Combine(jdkDir, "bin");
+                if (Directory.Exists(jdkBinDir))
+                {
+                    logger.LogDirectoryContents(jdkBinDir, "JDK/bin Directory");
+                }
+            }
             
             if (!toolsManager.AreToolsAvailable())
             {
                 Console.WriteLine();
                 Console.WriteLine("Some tools need to be downloaded (first run only)...");
+                logger.LogInfo("Some tools need to be downloaded...");
+                
                 var toolsReady = await toolsManager.EnsureToolsAvailableAsync();
                 if (!toolsReady)
                 {
                     Console.WriteLine("ERROR: Failed to download required tools.");
                     Console.WriteLine("Please check your internet connection and try again.");
+                    logger.LogError("Failed to download required tools");
+                    logger.LogFinalResult(false, DateTime.Now - buildStartTime);
+                    Console.WriteLine($"\nFull log saved to: {logger.LogFilePath}");
                     return;
                 }
                 Console.WriteLine();
+                
+                // Re-log tool paths after download
+                logger.LogToolPaths(
+                    toolsManager.GetJavaExecutablePath(),
+                    toolsManager.ApkToolPath,
+                    toolsManager.UberApkSignerPath,
+                    toolsManager.Love2dApkPath,
+                    toolsManager.ToolsDirectory);
             }
 
             // Create services using the tools manager paths
             var gameDetector = new GameDetector();
             var patchService = new PatchService();
             var modInjectionService = new ModInjectionService();
-            var javaTool = new JavaTool(toolsManager.GetJavaExecutablePath());
+            var javaPath = toolsManager.GetJavaExecutablePath();
+            var javaTool = new JavaTool(javaPath);
             var apkTool = new ApkTool(javaTool, toolsManager.ApkToolPath, toolsManager.UberApkSignerPath);
             var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool, toolsManager.Love2dApkPath);
 
+            // Log Balatro detection
+            var balatroPath = await gameDetector.GetGameInstallPathAsync();
+            logger.LogBalatroDetection(balatroPath, balatroPath != null);
+
             // Validate environment first with detailed reporting
             Console.WriteLine("Validating build environment...");
+            logger.LogSection("BUILD ENVIRONMENT VALIDATION");
             
             // Check each component individually for better error messages
-            Console.WriteLine($"  Java path: {toolsManager.GetJavaExecutablePath()}");
-            Console.WriteLine($"  Java exists: {File.Exists(toolsManager.GetJavaExecutablePath())}");
+            Console.WriteLine($"  Java path: {javaPath}");
+            Console.WriteLine($"  Java exists: {File.Exists(javaPath)}");
+            logger.LogInfo($"Java path: {javaPath}");
+            logger.LogInfo($"Java file exists: {File.Exists(javaPath)}");
+            
             Console.WriteLine($"  APKTool path: {toolsManager.ApkToolPath}");
             Console.WriteLine($"  APKTool exists: {File.Exists(toolsManager.ApkToolPath)}");
+            logger.LogInfo($"APKTool path: {toolsManager.ApkToolPath}");
+            logger.LogInfo($"APKTool file exists: {File.Exists(toolsManager.ApkToolPath)}");
+            
             Console.WriteLine($"  Love2D path: {toolsManager.Love2dApkPath}");
             Console.WriteLine($"  Love2D exists: {File.Exists(toolsManager.Love2dApkPath)}");
+            logger.LogInfo($"Love2D path: {toolsManager.Love2dApkPath}");
+            logger.LogInfo($"Love2D file exists: {File.Exists(toolsManager.Love2dApkPath)}");
             
             // Test Java can actually run
             Console.WriteLine("  Testing Java...");
-            var javaTestResult = await javaTool.IsAvailableAsync();
+            logger.LogInfo("Testing Java execution...");
+            
+            // Run Java test and capture output for logging
+            string? javaStdout = null, javaStderr = null;
+            int? javaExitCode = null;
+            bool javaTestResult = false;
+            
+            try
+            {
+                var javaProcess = new System.Diagnostics.Process();
+                javaProcess.StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = javaPath,
+                    Arguments = "-version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                javaProcess.Start();
+                javaStdout = await javaProcess.StandardOutput.ReadToEndAsync();
+                javaStderr = await javaProcess.StandardError.ReadToEndAsync();
+                await javaProcess.WaitForExitAsync();
+                javaExitCode = javaProcess.ExitCode;
+                javaTestResult = javaExitCode == 0;
+            }
+            catch (Exception ex)
+            {
+                logger.LogException("Java test", ex);
+                javaStderr = ex.Message;
+            }
+            
             Console.WriteLine($"  Java works: {javaTestResult}");
+            logger.LogJavaTest(javaPath, javaTestResult, javaExitCode, javaStdout, javaStderr);
             
             // Test APKTool
             Console.WriteLine("  Testing APKTool...");
-            var apkToolTestResult = await apkTool.IsAvailableAsync();
+            logger.LogInfo("Testing APKTool execution...");
+            
+            string? apkToolOutput = null, apkToolError = null;
+            bool apkToolTestResult = false;
+            
+            try
+            {
+                var apkToolProcess = new System.Diagnostics.Process();
+                apkToolProcess.StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = javaPath,
+                    Arguments = $"-jar \"{toolsManager.ApkToolPath}\" --version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                apkToolProcess.Start();
+                apkToolOutput = await apkToolProcess.StandardOutput.ReadToEndAsync();
+                apkToolError = await apkToolProcess.StandardError.ReadToEndAsync();
+                await apkToolProcess.WaitForExitAsync();
+                apkToolTestResult = apkToolProcess.ExitCode == 0 && !string.IsNullOrEmpty(apkToolOutput);
+            }
+            catch (Exception ex)
+            {
+                logger.LogException("APKTool test", ex);
+                apkToolError = ex.Message;
+            }
+            
             Console.WriteLine($"  APKTool works: {apkToolTestResult}");
+            logger.LogApkToolTest(toolsManager.ApkToolPath, javaPath, apkToolTestResult, apkToolOutput, apkToolError);
+            
+            // Log validation results
+            logger.LogToolValidation("Java", File.Exists(javaPath), javaTestResult, javaStdout ?? javaStderr);
+            logger.LogToolValidation("APKTool", File.Exists(toolsManager.ApkToolPath), apkToolTestResult, apkToolOutput ?? apkToolError);
             
             if (!await buildService.ValidateBuildEnvironmentAsync())
             {
@@ -193,17 +335,34 @@ internal class Program
                 Console.WriteLine("Debug info:");
                 Console.WriteLine($"  - Java available: {javaTestResult}");
                 Console.WriteLine($"  - APKTool available: {apkToolTestResult}");
-                Console.WriteLine($"  - Balatro found: {await gameDetector.GetGameInstallPathAsync() != null}");
+                Console.WriteLine($"  - Balatro found: {balatroPath != null}");
                 Console.WriteLine();
-                Console.WriteLine("Check the debug log at: %LOCALAPPDATA%\\BalatroMobile\\debug.log");
+                
+                logger.LogError("Build environment validation failed!");
+                logger.LogInfo($"Java available: {javaTestResult}");
+                logger.LogInfo($"APKTool available: {apkToolTestResult}");
+                logger.LogInfo($"Balatro found: {balatroPath != null}");
+                logger.LogFinalResult(false, DateTime.Now - buildStartTime);
+                
+                Console.WriteLine($"Full diagnostic log saved to:");
+                Console.WriteLine($"  {logger.LogFilePath}");
+                Console.WriteLine();
+                Console.WriteLine("Please share this log file when reporting issues.");
                 return;
             }
             Console.WriteLine("OK: Build environment validated");
+            logger.LogInfo("Build environment validation PASSED");
 
-            // Progress reporting
-            var progress = new Progress<string>(message => Console.WriteLine($"📋 {message}"));
+            // Progress reporting with logging
+            var progress = new Progress<string>(message => {
+                Console.WriteLine($"📋 {message}");
+                logger.LogBuildStep(message, true);
+            });
 
             Console.WriteLine("Starting build process...");
+            logger.LogSection("BUILD PROCESS");
+            logger.LogInfo("Starting build...");
+            
             var result = await buildService.BuildAsync(config, progress);
 
             Console.WriteLine();
@@ -211,12 +370,28 @@ internal class Program
             Console.WriteLine($"Duration: {result.Duration.TotalSeconds:F1}s");
             Console.WriteLine();
 
+            // Log all messages
+            logger.LogSection("BUILD MESSAGES");
+            foreach (var message in result.Messages)
+            {
+                logger.LogInfo($"Build: {message}");
+            }
+
             if (result.Success)
             {
                 Console.WriteLine("SUCCESS: Build completed!");
+                logger.LogInfo("BUILD SUCCEEDED");
+                
                 if (!string.IsNullOrEmpty(result.OutputPath))
                 {
                     Console.WriteLine($"📱 Output: {result.OutputPath}");
+                    logger.LogInfo($"Output file: {result.OutputPath}");
+                    
+                    if (File.Exists(result.OutputPath))
+                    {
+                        var outputInfo = new FileInfo(result.OutputPath);
+                        logger.LogInfo($"Output size: {outputInfo.Length:N0} bytes ({outputInfo.Length / 1024.0 / 1024.0:F2} MB)");
+                    }
                 }
 
                 Console.WriteLine();
@@ -224,16 +399,23 @@ internal class Program
                 Console.WriteLine("1. Transfer the APK to your Android device");
                 Console.WriteLine("2. Install and run the app");
                 Console.WriteLine("3. Run 'BalatroMobile transfer' to copy your saves");
+                
+                logger.LogFinalResult(true, DateTime.Now - buildStartTime);
             }
             else
             {
                 Console.WriteLine("ERROR: Build failed!");
+                logger.LogError("BUILD FAILED");
+                
                 Console.WriteLine();
                 Console.WriteLine("Errors:");
                 foreach (var error in result.Errors)
                 {
                     Console.WriteLine($"  - {error}");
+                    logger.LogError($"Build error: {error}");
                 }
+                
+                logger.LogFinalResult(false, DateTime.Now - buildStartTime);
             }
 
             if (result.Messages.Any())
@@ -245,6 +427,9 @@ internal class Program
                     Console.WriteLine($"  ✓ {message}");
                 }
             }
+            
+            Console.WriteLine();
+            Console.WriteLine($"Full log saved to: {logger.LogFilePath}");
         }
         catch (Exception ex)
         {

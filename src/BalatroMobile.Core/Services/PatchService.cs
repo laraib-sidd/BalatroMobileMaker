@@ -2,6 +2,13 @@ using BalatroMobile.Core.Models;
 
 namespace BalatroMobile.Core.Services;
 
+/// <summary>
+/// Patch service that applies patches by replacing ENTIRE LINES containing search patterns.
+/// This matches the behavior of the original blake502/balatro-mobile-maker.
+/// 
+/// CRITICAL: The original tool replaces the ENTIRE LINE that contains the search pattern,
+/// not just the search pattern itself. This is essential for the patches to work correctly.
+/// </summary>
 public class PatchService : IPatchService
 {
     public async Task<IEnumerable<PatchResult>> ApplyPatchesAsync(IEnumerable<PatchConfig> patches, string basePath)
@@ -42,8 +49,9 @@ public class PatchService : IPatchService
 
             try
             {
-                var content = await File.ReadAllTextAsync(filePath);
-                if (!content.Contains(patch.SearchPattern))
+                var lines = await File.ReadAllLinesAsync(filePath);
+                bool found = lines.Any(line => line.Contains(patch.SearchPattern, StringComparison.Ordinal));
+                if (!found)
                 {
                     return false;
                 }
@@ -57,6 +65,12 @@ public class PatchService : IPatchService
         return true;
     }
 
+    /// <summary>
+    /// Applies a patch by finding the FIRST line containing the search pattern
+    /// and replacing the ENTIRE LINE with the replacement text.
+    /// 
+    /// This matches the original blake502 tool behavior exactly.
+    /// </summary>
     private async Task<PatchResult> ApplyPatchAsync(PatchConfig patch, string basePath)
     {
         var filePath = Path.Combine(basePath, patch.FilePath);
@@ -72,36 +86,35 @@ public class PatchService : IPatchService
             };
         }
 
-        var content = await File.ReadAllTextAsync(filePath);
+        // Read file as LINES (like the original tool)
+        var lines = await File.ReadAllLinesAsync(filePath);
+        
+        // Find the FIRST line containing the search pattern
+        bool found = false;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].IndexOf(patch.SearchPattern, StringComparison.Ordinal) != -1)
+            {
+                // Replace the ENTIRE LINE with the replacement text
+                lines[i] = patch.Replacement;
+                found = true;
+                break; // Only replace the first occurrence
+            }
+        }
 
-        if (!content.Contains(patch.SearchPattern))
+        if (!found)
         {
             return new PatchResult
             {
                 Success = false,
                 FilePath = patch.FilePath,
                 Description = patch.Description,
-                Error = "Search pattern not found in file"
+                Error = $"Search pattern '{patch.SearchPattern}' not found in any line"
             };
         }
 
-        // Find the first occurrence and replace it
-        var index = content.IndexOf(patch.SearchPattern);
-        if (index == -1)
-        {
-            return new PatchResult
-            {
-                Success = false,
-                FilePath = patch.FilePath,
-                Description = patch.Description,
-                Error = "Search pattern not found"
-            };
-        }
-
-        var newContent = content.Remove(index, patch.SearchPattern.Length)
-                              .Insert(index, patch.Replacement);
-
-        await File.WriteAllTextAsync(filePath, newContent);
+        // Write back as lines (like the original tool)
+        await File.WriteAllLinesAsync(filePath, lines);
 
         return new PatchResult
         {

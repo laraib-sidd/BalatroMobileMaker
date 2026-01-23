@@ -387,6 +387,36 @@ internal class Program
             return;
         }
 
+        // Check if Balatro is installed - if not, prompt for path
+        Console.WriteLine();
+        var gameDetector = new GameDetector();
+        var balatroPath = await gameDetector.GetGameInstallPathAsync();
+        
+        if (string.IsNullOrEmpty(balatroPath))
+        {
+            Console.WriteLine("Balatro installation not found in default locations.");
+            var userPath = AskForPath(
+                "Please enter the path to your Balatro folder (containing Balatro.exe):",
+                @"Example: D:\SteamLibrary\steamapps\common\Balatro",
+                path => File.Exists(Path.Combine(path, "Balatro.exe"))
+            );
+            
+            if (string.IsNullOrEmpty(userPath))
+            {
+                Console.WriteLine("Cannot proceed without Balatro installation.");
+                WaitForKeyPress();
+                return;
+            }
+            
+            // Set the override path for the game detector
+            GameDetector.OverrideGamePath = userPath;
+            Console.WriteLine($"Using Balatro path: {userPath}");
+        }
+        else
+        {
+            Console.WriteLine($"Found Balatro at: {balatroPath}");
+        }
+
         // Run pre-flight checks
         Console.WriteLine();
         await RunPreFlightChecks();
@@ -454,12 +484,39 @@ internal class Program
 
         // Output file
         Console.WriteLine();
-        Console.Write("Output filename (press Enter for default): ");
+        Console.Write("Output filename (press Enter for default 'balatro.apk'): ");
         string outputFile = Console.ReadLine()?.Trim() ?? "";
         if (!string.IsNullOrEmpty(outputFile))
         {
-            buildArgs.Add("--output");
-            buildArgs.Add(outputFile);
+            // Validate the output path
+            var validatedPath = ValidateOutputPath(outputFile);
+            if (validatedPath == null)
+            {
+                Console.WriteLine("Using default output path instead.");
+                outputFile = "";
+            }
+            else
+            {
+                outputFile = validatedPath;
+                buildArgs.Add("--output");
+                buildArgs.Add(outputFile);
+            }
+        }
+        
+        // Also validate default path if user didn't specify custom
+        if (string.IsNullOrEmpty(outputFile))
+        {
+            var defaultPath = buildAndroid ? "balatro.apk" : "balatro.ipa";
+            if (File.Exists(defaultPath))
+            {
+                bool overwrite = AskYesNo($"Default output '{defaultPath}' already exists. Overwrite?", true);
+                if (!overwrite)
+                {
+                    Console.WriteLine("Build cancelled - please specify a different output filename.");
+                    WaitForKeyPress();
+                    return;
+                }
+            }
         }
 
         // Show configuration summary
@@ -670,22 +727,94 @@ internal class Program
             Console.WriteLine("Run 'BalatroMobile check' again after fixing issues.");
         }
     }
-}
 
-// Placeholder implementations - these would be properly implemented
-internal class GameDetector : IGameDetector
-{
-    public Task<bool> IsSteamBalatroInstalledAsync() => Task.FromResult(true);
-    public Task<string?> GetGameInstallPathAsync() => Task.FromResult<string?>("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Balatro");
-    public Task<bool> IsGameWorkingAsync() => Task.FromResult(true);
-}
 
-internal class PlatformDetector : IPlatformDetector
-{
-    public Task<bool> AreAndroidDeveloperOptionsEnabledAsync() => Task.FromResult(false);
-    public Task<bool> IsUSBDebuggingEnabledAsync() => Task.FromResult(false);
-    public Task<bool> IsADBConnectionWorkingAsync() => Task.FromResult(true);
-    public Task<bool> HasAndroidSufficientStorageAsync() => Task.FromResult(true);
-    public Task<bool> IsJavaRuntimeAvailableAsync() => Task.FromResult(true);
-    public Task<bool> IsInternetConnectionAvailableAsync() => Task.FromResult(true);
+    /// <summary>
+    /// Prompts user to enter a path when auto-detection fails.
+    /// Returns null if user skips (empty input).
+    /// </summary>
+    private static string? AskForPath(string prompt, string hint, Func<string, bool> validator)
+    {
+        Console.WriteLine();
+        Console.WriteLine(prompt);
+        if (!string.IsNullOrEmpty(hint))
+        {
+            Console.WriteLine($"   Hint: {hint}");
+        }
+        Console.WriteLine("   (Press Enter to skip)");
+
+        while (true)
+        {
+            Console.Write("> ");
+            var path = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(path))
+            {
+                return null; // User skipped
+            }
+
+            // Remove quotes if user pasted a quoted path
+            path = path.Trim('"');
+
+            if (validator(path))
+            {
+                return path;
+            }
+
+            Console.WriteLine("   Invalid path. Please try again or press Enter to skip.");
+        }
+    }
+
+    /// <summary>
+    /// Validates and potentially prompts for confirmation on output path.
+    /// Returns the validated path, or null if user cancels.
+    /// </summary>
+    private static string? ValidateOutputPath(string outputPath)
+    {
+        // Check if parent directory exists
+        var directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        {
+            Console.WriteLine($"Directory '{directory}' does not exist.");
+            bool create = AskYesNo("Would you like to create it?", true);
+            if (create)
+            {
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    Console.WriteLine($"Created directory: {directory}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to create directory: {ex.Message}");
+                    return null;
+                }
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        // Check if file already exists
+        if (File.Exists(outputPath))
+        {
+            bool overwrite = AskYesNo($"File '{outputPath}' already exists. Overwrite?", false);
+            if (!overwrite)
+            {
+                return null;
+            }
+        }
+
+        // Validate filename characters
+        var fileName = Path.GetFileName(outputPath);
+        var invalidChars = Path.GetInvalidFileNameChars();
+        if (fileName.IndexOfAny(invalidChars) >= 0)
+        {
+            Console.WriteLine($"Invalid characters in filename: {fileName}");
+            return null;
+        }
+
+        return outputPath;
+    }
 }

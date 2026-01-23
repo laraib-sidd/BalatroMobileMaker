@@ -1,16 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\BalatroMobile.Core\BalatroMobile.Core.csproj" />
-    <ProjectReference Include="..\BalatroMobile.Configuration\BalatroMobile.Configuration.csproj" />
-    <ProjectReference Include="..\BalatroMobile.Infrastructure\BalatroMobile.Infrastructure.csproj" />
-  </ItemGroup>
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- Application info -->
+    <AssemblyName>BalatroMobile</AssemblyName>
+    <Product>BalatroMobile</Product>
+    <Description>Build Balatro for Mobile Devices with Mod Support</Description>
+    <Version>1.1.0</Version>
+    
+    <!-- Single-file self-contained publishing for Windows -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    
+    <!-- Trim unused code to reduce size -->
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BalatroMobile.Core\BalatroMobile.Core.csproj" />
+    <ProjectReference Include="..\BalatroMobile.Configuration\BalatroMobile.Configuration.csproj" />
+    <ProjectReference Include="..\BalatroMobile.Infrastructure\BalatroMobile.Infrastructure.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -6,12 +6,13 @@ BalatroMobile is a modern, re-architected tool for building Balatro (the popular
 
 ## ✨ Features
 
-- 🚀 **Modern Architecture** - Clean, maintainable, and extensible codebase
+- 🖱️ **Double-Click to Run** - No CLI knowledge needed, just download and run
+- 🧙 **Interactive Wizard** - Guided setup with simple Y/N prompts  
+- 🔍 **Smart Path Detection** - Auto-finds Balatro in any Steam library, or prompts you
 - 🛡️ **Pre-flight Checks** - Comprehensive system validation before building
 - 🔧 **Full Mod Support** - Automatic Lovely + Steamodded injection
 - 📱 **Cross-Platform** - Android and iOS support
-- ⚡ **Async Processing** - Parallel downloads and operations
-- 🎯 **Error Recovery** - Intelligent retry mechanisms and detailed diagnostics
+- 📦 **Single EXE** - Self-contained, no .NET runtime required
 
 ## 🏗️ Architecture
 
@@ -39,19 +40,30 @@ BalatroMobile/
 
 ## 🚀 Quick Start
 
+### For Users (Recommended)
+
+1. **Download** `BalatroMobile.exe` from the [Releases](https://github.com/laraib-sidd/BalatroMobileMaker/releases) page
+2. **Double-click** to run - no installation needed!
+3. **Follow the prompts** - the interactive wizard will guide you through everything
+
+That's it! The tool will:
+- Auto-detect your Balatro installation (or ask you to provide the path)
+- Run pre-flight checks to ensure everything is ready
+- Guide you through build options with simple Y/N questions
+- Create your modded APK
+
 ### Prerequisites
 
 Before using BalatroMobile, ensure your system meets all requirements:
 
 1. **Steam Balatro** installed and working
 2. **Mods properly set up** (Lovely, Steamodded, Cryptid, etc.)
-3. **Android device** with developer options enabled
-4. **USB debugging** enabled and working
-5. **Java/OpenJDK** installed for APK building
+3. **Java/OpenJDK** installed for APK building
+4. **(Optional)** Android device with USB debugging for save transfer
 
 ### Pre-Flight Check
 
-Always run the pre-flight check first to verify your setup:
+The tool automatically runs pre-flight checks, but you can also run them manually:
 
 ```bash
 # Run all pre-flight checks

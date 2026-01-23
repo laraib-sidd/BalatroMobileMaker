@@ -1,0 +1,4 @@
+# CODEOWNERS file - defines who owns the code and must review PRs
+
+# Default owner for everything in the repo
+* @laraib-sidd

@@ -2,6 +2,13 @@
 bin/
 obj/
 out/
+publish/
+publish_new/
+release/
+
+# Release artifacts (upload to GitHub Releases, not repo)
+*_ReadyForUsers*/
+*.zip
 
 # User-specific files
 *.user

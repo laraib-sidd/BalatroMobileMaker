@@ -1,0 +1,58 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.suo
+*.cache
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Downloaded tools (during development)
+love-11.5-android-embed.apk
+Balatro-APK-Patch.zip
+Balatro-APK-Patch/
+balatro-apk/
+balatro.zip
+balatro-unsigned.apk
+balatro-aligned-debugSigned.apk
+openjdk.zip
+openjdk.tar.gz
+openjdk/
+jdk-21.0.3+9/
+platform-tools.zip
+platform-tools/
+ios.py
+Balatro/
+balatro-base.ipa
+balatro-base.zip
+game.love
+uber-apk-signer.jar
+apktool.jar
+
+# Configuration files with sensitive data
+appsettings.local.json
+secrets.json

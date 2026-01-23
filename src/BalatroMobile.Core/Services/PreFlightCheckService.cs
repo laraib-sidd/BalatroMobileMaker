@@ -223,74 +223,78 @@ public class PreFlightCheckService : IPreFlightCheckService
     // Individual check implementations
     private async Task<CheckResult> CheckSteamBalatroInstalled()
     {
-        // Implementation would check Steam installation and Balatro presence
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var installed = await _gameDetector.IsSteamBalatroInstalledAsync();
+        return installed ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckGameWorksOnPC()
     {
-        // Implementation would attempt to verify game launches
-        return await Task.FromResult(CheckResult.Warning); // Placeholder
+        var working = await _gameDetector.IsGameWorkingAsync();
+        return working ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckModsFolderStructure()
     {
-        // Implementation would check %APPDATA%\Balatro\Mods structure
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var modValidator = new ModValidator();
+        var valid = await modValidator.ValidateModsFolderStructureAsync();
+        return valid ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckLovelyInjector()
     {
-        // Implementation would check for version.dll in Balatro folder
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var modValidator = new ModValidator();
+        var working = await modValidator.IsLovelyInjectorWorkingAsync();
+        return working ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckLovelyDump()
     {
-        // Implementation would check dump folder exists and has content
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var modValidator = new ModValidator();
+        var exists = await modValidator.DoesLovelyDumpExistAsync();
+        return exists ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckModsWorkingOnPC()
     {
-        // Implementation would check if mods are active in PC version
-        return await Task.FromResult(CheckResult.Warning); // Placeholder
+        var modValidator = new ModValidator();
+        var working = await modValidator.AreModsWorkingOnPCAsync();
+        return working ? CheckResult.Pass : CheckResult.Warning; // Warning because we can't fully verify without running the game
     }
 
     private async Task<CheckResult> CheckAndroidDeveloperOptions()
     {
-        // Implementation would check ADB for developer options
-        return await Task.FromResult(CheckResult.Unknown); // Placeholder
+        var enabled = await _platformDetector.AreAndroidDeveloperOptionsEnabledAsync();
+        return enabled ? CheckResult.Pass : CheckResult.Warning; // Warning because we may not be able to check
     }
 
     private async Task<CheckResult> CheckUSBDebugging()
     {
-        // Implementation would check ADB devices and debugging status
-        return await Task.FromResult(CheckResult.Unknown); // Placeholder
+        var enabled = await _platformDetector.IsUSBDebuggingEnabledAsync();
+        return enabled ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckADBConnection()
     {
-        // Implementation would run 'adb devices' and verify device connected
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var working = await _platformDetector.IsADBConnectionWorkingAsync();
+        return working ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckAndroidStorage()
     {
-        // Implementation would check available storage on Android device
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var sufficient = await _platformDetector.HasAndroidSufficientStorageAsync();
+        return sufficient ? CheckResult.Pass : CheckResult.Warning;
     }
 
     private async Task<CheckResult> CheckJavaRuntime()
     {
-        // Implementation would check if Java is available
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var available = await _platformDetector.IsJavaRuntimeAvailableAsync();
+        return available ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckInternetConnection()
     {
-        // Implementation would test internet connectivity
-        return await Task.FromResult(CheckResult.Pass); // Placeholder
+        var available = await _platformDetector.IsInternetConnectionAvailableAsync();
+        return available ? CheckResult.Pass : CheckResult.Warning; // Warning because internet is needed for tool downloads
     }
 
     private static string GetResultMessage(PreFlightCheck check, CheckResult result)

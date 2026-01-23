@@ -79,16 +79,16 @@ public class BuildService : IBuildService
             // Check for game files in current directory
             var currentDir = Environment.CurrentDirectory;
             var balatroExePath = Path.Combine(currentDir, "Balatro.exe");
-            var gameLovePath = Path.Combine(currentDir, "Game.love");
+            var inputLovePath = Path.Combine(currentDir, "Game.love");
             
             string gameFilePath;
             if (File.Exists(balatroExePath))
             {
                 gameFilePath = balatroExePath;
             }
-            else if (File.Exists(gameLovePath))
+            else if (File.Exists(inputLovePath))
             {
-                gameFilePath = gameLovePath;
+                gameFilePath = inputLovePath;
             }
             else
             {

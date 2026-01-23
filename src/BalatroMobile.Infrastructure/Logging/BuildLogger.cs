@@ -73,15 +73,15 @@ public class BuildLogger : IDisposable
         Log($"  Exists: {Directory.Exists(toolsDir)}");
         Log("");
         
-        LogFilePath("Java", javaPath);
-        LogFilePath("APKTool", apkToolPath);
-        LogFilePath("uber-apk-signer", uberSignerPath);
-        LogFilePath("Love2D APK", love2dPath);
+        LogToolFile("Java", javaPath);
+        LogToolFile("APKTool", apkToolPath);
+        LogToolFile("uber-apk-signer", uberSignerPath);
+        LogToolFile("Love2D APK", love2dPath);
         
         Log("");
     }
 
-    private void LogFilePath(string name, string path)
+    private void LogToolFile(string name, string path)
     {
         var exists = File.Exists(path);
         var size = exists ? new FileInfo(path).Length : 0;

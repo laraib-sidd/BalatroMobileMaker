@@ -18,17 +18,24 @@ public class ToolsManager
     private const string APKTOOL_VERSION = "2.9.3";
     private const string UBER_APK_SIGNER_VERSION = "1.3.0";
     private const string LOVE2D_VERSION = "11.5";
-    private const string OPENJDK_VERSION = "21";
+    private const string OPENJDK_VERSION = "21.0.5";
+    private const string OPENJDK_BUILD = "11";
 
-    // Download URLs
-    private static readonly string APKTOOL_URL = $"https://github.com/iBotPeaches/Apktool/releases/download/v{APKTOOL_VERSION}/apktool_{APKTOOL_VERSION}.jar";
-    private static readonly string UBER_APK_SIGNER_URL = $"https://github.com/nickreid/uber-apk-signer/releases/download/v{UBER_APK_SIGNER_VERSION}/uber-apk-signer-{UBER_APK_SIGNER_VERSION}.jar";
-    private static readonly string LOVE2D_APK_URL = $"https://github.com/love2d/love-android/releases/download/{LOVE2D_VERSION}/love-{LOVE2D_VERSION}-android-embed.apk";
+    // Download URLs - VERIFIED WORKING URLs
+    // APKTool: Using Bitbucket (official source) since GitHub doesn't host the jar directly
+    private static readonly string APKTOOL_URL = $"https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_{APKTOOL_VERSION}.jar";
     
-    // OpenJDK - using Adoptium (Eclipse Temurin) portable builds
+    // uber-apk-signer: GitHub user is patrickfav (NOT nickreid)
+    private static readonly string UBER_APK_SIGNER_URL = $"https://github.com/patrickfav/uber-apk-signer/releases/download/v{UBER_APK_SIGNER_VERSION}/uber-apk-signer-{UBER_APK_SIGNER_VERSION}.jar";
+    
+    // Love2D: Tag is "11.5a" not "11.5"
+    private static readonly string LOVE2D_APK_URL = $"https://github.com/love2d/love-android/releases/download/{LOVE2D_VERSION}a/love-{LOVE2D_VERSION}-android-embed.apk";
+    
+    // OpenJDK - using Adoptium (Eclipse Temurin) portable JRE builds
+    // Format: OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip
     private static readonly string OPENJDK_URL = RuntimeInformation.OSArchitecture == Architecture.Arm64
-        ? $"https://github.com/adoptium/temurin{OPENJDK_VERSION}-binaries/releases/download/jdk-{OPENJDK_VERSION}%2B35/OpenJDK{OPENJDK_VERSION}U-jre_aarch64_windows_hotspot_{OPENJDK_VERSION}_35.zip"
-        : $"https://github.com/adoptium/temurin{OPENJDK_VERSION}-binaries/releases/download/jdk-{OPENJDK_VERSION}%2B35/OpenJDK{OPENJDK_VERSION}U-jre_x64_windows_hotspot_{OPENJDK_VERSION}_35.zip";
+        ? $"https://github.com/adoptium/temurin21-binaries/releases/download/jdk-{OPENJDK_VERSION}%2B{OPENJDK_BUILD}/OpenJDK21U-jre_aarch64_windows_hotspot_{OPENJDK_VERSION}_{OPENJDK_BUILD}.zip"
+        : $"https://github.com/adoptium/temurin21-binaries/releases/download/jdk-{OPENJDK_VERSION}%2B{OPENJDK_BUILD}/OpenJDK21U-jre_x64_windows_hotspot_{OPENJDK_VERSION}_{OPENJDK_BUILD}.zip";
 
     public string ToolsDirectory => _toolsDirectory;
     public string JavaPath => Path.Combine(_toolsDirectory, "jdk", "bin", "java.exe");

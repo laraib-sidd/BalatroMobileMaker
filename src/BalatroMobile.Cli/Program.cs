@@ -20,7 +20,7 @@ internal class Program
         }
         else if (args[0] == "transfer")
         {
-            Console.WriteLine("🚧 Transfer functionality coming soon!");
+            await RunTransfer(args.Skip(1).ToArray());
         }
         else
         {
@@ -183,6 +183,148 @@ internal class Program
         }
     }
 
+    private static async Task RunTransfer(string[] args)
+    {
+        try
+        {
+            // Parse transfer arguments
+            var direction = TransferDirection.PcToAndroid; // Default
+            var createBackup = true;
+            var includeMods = true;
+
+            // Simple argument parsing
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--from":
+                        if (i + 1 < args.Length)
+                        {
+                            direction = args[i + 1].ToLower() switch
+                            {
+                                "android" => TransferDirection.AndroidToPc,
+                                "pc" or _ => TransferDirection.PcToAndroid
+                            };
+                            i++;
+                        }
+                        break;
+                    case "--to":
+                        if (i + 1 < args.Length)
+                        {
+                            direction = args[i + 1].ToLower() switch
+                            {
+                                "pc" => TransferDirection.AndroidToPc,
+                                "android" or _ => TransferDirection.PcToAndroid
+                            };
+                            i++;
+                        }
+                        break;
+                    case "--no-backup":
+                        createBackup = false;
+                        break;
+                    case "--no-mods":
+                        includeMods = false;
+                        break;
+                }
+            }
+
+            var config = new SaveTransferConfig
+            {
+                Direction = direction,
+                CreateBackup = createBackup,
+                IncludeMods = includeMods
+            };
+
+            Console.WriteLine("💾 BalatroMobile Save Transfer");
+            Console.WriteLine("=============================");
+            Console.WriteLine();
+            Console.WriteLine($"Direction: {config.Direction}");
+            Console.WriteLine($"Create Backup: {config.CreateBackup}");
+            Console.WriteLine($"Include Mods: {config.IncludeMods}");
+            Console.WriteLine();
+
+            // Create services
+            var platformDetector = new PlatformDetector();
+            var saveTransferService = new SaveTransferService(platformDetector);
+
+            // Validate environment
+            Console.WriteLine("Validating transfer environment...");
+            if (!await saveTransferService.ValidateTransferEnvironmentAsync(config))
+            {
+                Console.WriteLine("❌ Transfer environment validation failed!");
+                Console.WriteLine("Please ensure:");
+                Console.WriteLine("- Android device is connected via USB");
+                Console.WriteLine("- USB debugging is enabled");
+                Console.WriteLine("- ADB can communicate with the device");
+                return;
+            }
+            Console.WriteLine("✅ Transfer environment validated");
+
+            // Show what will be transferred
+            var availableFiles = await saveTransferService.GetAvailableSaveFilesAsync();
+            Console.WriteLine($"Found save files: {string.Join(", ", availableFiles)}");
+
+            // Confirm transfer
+            Console.WriteLine();
+            Console.WriteLine($"Ready to transfer saves from {config.Direction}.");
+            if (config.CreateBackup)
+            {
+                Console.WriteLine("A backup will be created before transfer.");
+            }
+            Console.WriteLine();
+            Console.WriteLine("⚠️  WARNING: This will overwrite existing save files!");
+            Console.WriteLine("Continue? (y/N): ");
+
+            var response = Console.ReadLine()?.ToLower();
+            if (response != "y" && response != "yes")
+            {
+                Console.WriteLine("Transfer cancelled.");
+                return;
+            }
+
+            // Perform transfer
+            Console.WriteLine("Starting transfer...");
+            var result = await saveTransferService.TransferSavesAsync(config);
+
+            Console.WriteLine();
+            if (result.Success)
+            {
+                Console.WriteLine("🎉 Transfer completed successfully!");
+                Console.WriteLine($"Files transferred: {result.FilesTransferred}");
+                Console.WriteLine($"Data transferred: {result.BytesTransferred} bytes");
+                Console.WriteLine($"Duration: {result.Duration.TotalSeconds:F1}s");
+
+                if (!string.IsNullOrEmpty(result.BackupPath))
+                {
+                    Console.WriteLine($"Backup created: {result.BackupPath}");
+                }
+
+                if (result.TransferredFiles.Any())
+                {
+                    Console.WriteLine("Transferred files:");
+                    foreach (var file in result.TransferredFiles)
+                    {
+                        Console.WriteLine($"  ✓ {file}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("❌ Transfer failed!");
+                Console.WriteLine("Errors:");
+                foreach (var error in result.Errors)
+                {
+                    Console.WriteLine($"  - {error}");
+                }
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Transfer failed with exception: {ex.Message}");
+        }
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("BalatroMobile - Build Balatro for Mobile Devices");
@@ -190,7 +332,7 @@ internal class Program
         Console.WriteLine("Usage:");
         Console.WriteLine("  BalatroMobile check                    - Run pre-flight checks");
         Console.WriteLine("  BalatroMobile build [options]          - Build for mobile");
-        Console.WriteLine("  BalatroMobile transfer                 - Transfer saves (coming soon)");
+        Console.WriteLine("  BalatroMobile transfer [options]       - Transfer saves between PC and Android");
         Console.WriteLine();
         Console.WriteLine("Build Options:");
         Console.WriteLine("  --platform <android|ios>              - Target platform (default: android)");
@@ -201,10 +343,31 @@ internal class Program
         Console.WriteLine("  --inject-mods                          - Inject mods during build");
         Console.WriteLine("  --output <path>                        - Output file path");
         Console.WriteLine();
+        Console.WriteLine("Transfer Options:");
+        Console.WriteLine("  --from <pc|android>                    - Source platform (default: pc)");
+        Console.WriteLine("  --to <android|pc>                      - Target platform (default: android)");
+        Console.WriteLine("  --no-backup                            - Skip backup creation");
+        Console.WriteLine("  --no-mods                              - Skip mod-related files");
+        Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  BalatroMobile build");
-        Console.WriteLine("  BalatroMobile build --platform android --fps 60 --high-dpi");
-        Console.WriteLine("  BalatroMobile build --no-landscape --output my-balatro.apk");
+        Console.WriteLine("  BalatroMobile transfer");
+        Console.WriteLine("  BalatroMobile transfer --from android --to pc");
+        Console.WriteLine("  BalatroMobile transfer --no-backup");
+        Console.WriteLine();
+        Console.WriteLine("Build Options:");
+        Console.WriteLine("  --platform <android|ios>              - Target platform (default: android)");
+        Console.WriteLine("  --fps <default|none|60>               - FPS cap (default: default)");
+        Console.WriteLine("  --no-landscape                         - Disable landscape lock");
+        Console.WriteLine("  --high-dpi                             - Enable high DPI mode");
+        Console.WriteLine("  --disable-crt                          - Disable CRT shader");
+        Console.WriteLine("  --inject-mods                          - Inject mods during build");
+        Console.WriteLine("  --output <path>                        - Output file path");
+        Console.WriteLine();
+        Console.WriteLine("Transfer Options:");
+        Console.WriteLine("  --from <pc|android>                    - Source platform (default: pc)");
+        Console.WriteLine("  --to <android|pc>                      - Target platform (default: android)");
+        Console.WriteLine("  --no-backup                            - Skip backup creation");
+        Console.WriteLine("  --no-mods                              - Skip mod-related files");
     }
 
     private static async Task RunPreFlightChecks()

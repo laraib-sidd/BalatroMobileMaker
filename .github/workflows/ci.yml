@@ -1,0 +1,46 @@
+name: CI Build Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/BalatroMobile.Cli/BalatroMobile.Cli.csproj
+
+      - name: Build
+        run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release --no-restore
+
+      - name: Test publish (verify single-file build works)
+        run: |
+          dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --output ./test-release
+
+      - name: Verify EXE created
+        run: |
+          if (Test-Path ./test-release/BalatroMobile.exe) {
+            Write-Host "Build successful! EXE size: $((Get-Item ./test-release/BalatroMobile.exe).Length / 1MB) MB"
+          } else {
+            Write-Error "BalatroMobile.exe not found!"
+            exit 1
+          }

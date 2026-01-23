@@ -90,10 +90,10 @@ public class PreFlightCheckService : IPreFlightCheckService
             new PreFlightCheck
             {
                 Name = "USBDebuggingEnabled",
-                Description = "USB debugging is enabled on Android device",
+                Description = "USB debugging is enabled on Android device (only needed for save transfer)",
                 CheckFunction = CheckUSBDebugging,
-                IsRequired = true,
-                FixSuggestion = "Settings → Additional settings → Developer options → Enable USB debugging"
+                IsRequired = false, // Not required for building modded APKs
+                FixSuggestion = "Settings → Additional settings → Developer options → Enable USB debugging (optional)"
             },
 
             new PreFlightCheck
@@ -270,7 +270,7 @@ public class PreFlightCheckService : IPreFlightCheckService
     private async Task<CheckResult> CheckUSBDebugging()
     {
         var enabled = await _platformDetector.IsUSBDebuggingEnabledAsync();
-        return enabled ? CheckResult.Pass : CheckResult.Fail;
+        return enabled ? CheckResult.Pass : CheckResult.Warning; // Warning since only needed for save transfer
     }
 
     private async Task<CheckResult> CheckADBConnection()

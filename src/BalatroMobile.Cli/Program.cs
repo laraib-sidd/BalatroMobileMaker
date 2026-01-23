@@ -375,6 +375,8 @@ internal class Program
         }
 
         // Platform selection
+        Console.WriteLine("NOTE: ADB is NOT required for building modded APKs - only for save transfer.");
+        Console.WriteLine();
         bool buildAndroid = AskYesNo("Would you like to build for Android?", true);
         bool buildIos = AskYesNo("Would you like to build for iOS (experimental)?", false);
 
@@ -586,19 +588,21 @@ internal class Program
         Console.WriteLine("  --no-landscape                       - Disable landscape lock");
         Console.WriteLine("  --high-dpi                           - Enable high DPI mode");
         Console.WriteLine("  --disable-crt                        - Disable CRT shader");
-        Console.WriteLine("  --inject-mods                        - Inject mods during build");
+        Console.WriteLine("  --inject-mods                        - Inject mods during build (ADB not required)");
         Console.WriteLine("  --output <path>                      - Output file path");
         Console.WriteLine();
-        Console.WriteLine("Transfer Options:");
+        Console.WriteLine("Transfer Options (requires ADB):");
         Console.WriteLine("  --from <pc|android>                  - Source platform (default: pc)");
         Console.WriteLine("  --to <android|pc>                    - Target platform (default: android)");
         Console.WriteLine("  --no-backup                          - Skip backup creation");
         Console.WriteLine("  --no-mods                            - Skip mod-related files");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  BalatroMobile transfer");
+        Console.WriteLine("  BalatroMobile build --inject-mods    # Create modded APK (no ADB needed)");
+        Console.WriteLine("  BalatroMobile transfer               # Transfer saves (requires ADB)");
         Console.WriteLine("  BalatroMobile transfer --from android --to pc");
-        Console.WriteLine("  BalatroMobile transfer --no-backup");
+        Console.WriteLine();
+        Console.WriteLine("NOTE: ADB is only required for save transfer, not for building modded APKs.");
         Console.WriteLine();
         WaitForKeyPress();
     }

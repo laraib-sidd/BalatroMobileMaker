@@ -183,24 +183,117 @@ public class BuildService : IBuildService
 
     private async Task<string?> BuildAndroidApkAsync(BuildConfig config, string gamePackagePath)
     {
-        // Placeholder implementation
-        // Real implementation would:
-        // 1. Download/extract base APK
-        // 2. Copy game.love to assets
-        // 3. Apply AndroidManifest patches
-        // 4. Recompile APK
-        // 5. Sign APK
+        var tempDir = Path.Combine(Path.GetTempPath(), "BalatroMobile", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
 
-        var outputPath = config.OutputPath;
-        if (string.IsNullOrEmpty(outputPath))
+        try
         {
-            outputPath = "balatro.apk";
+            var outputPath = config.OutputPath;
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                outputPath = "balatro.apk";
+            }
+
+            // Step 1: Get base APK path (placeholder - would download if not cached)
+            var baseApkPath = Path.Combine(tempDir, "love-11.5-android-embed.apk");
+            // In real implementation, download love-11.5-android-embed.apk
+
+            // Step 2: Decompile APK
+            var decompiledPath = Path.Combine(tempDir, "decompiled");
+            var decompileSuccess = await _apkTool.DecompileAsync(baseApkPath, decompiledPath);
+            if (!decompileSuccess)
+            {
+                return null;
+            }
+
+            // Step 3: Copy game.love to assets
+            var assetsPath = Path.Combine(decompiledPath, "assets");
+            Directory.CreateDirectory(assetsPath);
+            var gameLovePath = Path.Combine(assetsPath, "game.love");
+            if (File.Exists(gamePackagePath))
+            {
+                File.Copy(gamePackagePath, gameLovePath, true);
+            }
+
+            // Step 4: Inject mods if requested
+            if (config.InjectMods)
+            {
+                await InjectModsIntoApkAsync(config, decompiledPath);
+            }
+
+            // Step 5: Apply AndroidManifest patches
+            await ApplyAndroidManifestPatchesAsync(decompiledPath);
+
+            // Step 6: Recompile APK
+            var unsignedApkPath = Path.Combine(tempDir, "unsigned.apk");
+            var recompileSuccess = await _apkTool.CompileAsync(decompiledPath, unsignedApkPath);
+            if (!recompileSuccess)
+            {
+                return null;
+            }
+
+            // Step 7: Sign APK
+            var signSuccess = await _apkTool.SignAsync(unsignedApkPath);
+            if (!signSuccess)
+            {
+                // If signing fails, just use the unsigned APK (for development)
+                File.Copy(unsignedApkPath, outputPath, true);
+            }
+            else
+            {
+                // In real implementation, the signed APK would be renamed to outputPath
+                File.Copy(unsignedApkPath, outputPath, true);
+            }
+
+            return File.Exists(outputPath) ? outputPath : null;
         }
+        finally
+        {
+            // Clean up temp directory
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
 
-        // Simulate APK creation
-        await Task.Delay(1000); // Simulate work
+    private async Task InjectModsIntoApkAsync(BuildConfig config, string decompiledApkPath)
+    {
+        // Create the Android app data directory structure in the APK
+        var appDataPath = Path.Combine(decompiledApkPath, "assets", "files", "save", "game");
+        Directory.CreateDirectory(appDataPath);
 
-        return File.Exists(outputPath) ? outputPath : null;
+        // Configure mod injection for APK structure
+        var modConfig = new ModInjectionConfig
+        {
+            SourceModsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Balatro", "Mods"),
+            TargetModsPath = appDataPath,
+            IncludeLovelyDump = true,
+            IncludeSMODS = true,
+            IncludeLibraries = true,
+            CreateLovelyConfig = true,
+            ExcludedMods = new[] { "BrainstormRerollButton" } // Exclude problematic mods
+        };
+
+        // Inject mods into the APK structure
+        await _modInjectionService.InjectModsAsync(modConfig);
+    }
+
+    private async Task ApplyAndroidManifestPatchesAsync(string decompiledApkPath)
+    {
+        // Apply basic AndroidManifest patches (placeholder)
+        var manifestPath = Path.Combine(decompiledApkPath, "AndroidManifest.xml");
+        if (File.Exists(manifestPath))
+        {
+            // In real implementation, would patch package name, permissions, etc.
+            // For now, just leave as-is
+        }
     }
 
     private IEnumerable<PatchConfig> GetPatchesForConfig(BuildConfig config)
@@ -313,27 +406,4 @@ public class BuildService : IBuildService
         };
     }
 
-    private async Task<ModInjectionResult> InjectModsAsync(BuildConfig config)
-    {
-        var sourceModsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Balatro", "Mods");
-
-        // For build-time injection, we inject into a temporary location
-        // In a real implementation, this would be coordinated with save transfer
-        var targetModsPath = Path.Combine(Path.GetTempPath(), "BalatroMobile", "injected-mods");
-
-        var modConfig = new ModInjectionConfig
-        {
-            SourceModsPath = sourceModsPath,
-            TargetModsPath = targetModsPath,
-            IncludeLovelyDump = true,
-            IncludeSMODS = true,
-            IncludeLibraries = true,
-            CreateLovelyConfig = true,
-            ExcludedMods = new[] { "BrainstormRerollButton" } // Exclude known problematic mods for now
-        };
-
-        return await _modInjectionService.InjectModsAsync(modConfig);
-    }
 }

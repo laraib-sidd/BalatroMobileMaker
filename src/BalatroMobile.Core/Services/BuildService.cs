@@ -406,12 +406,18 @@ public class BuildService : IBuildService
     {
         var patches = new List<PatchConfig>();
 
-        // Mobile compatibility patches - these are applied to the Lua source code
+        // =====================================================
+        // MANDATORY PATCHES - Always applied for mobile to work
+        // =====================================================
+
+        // 1. CRITICAL: Mobile Exit Fix
+        // The original game has obfuscated code that exits on mobile platforms
+        // The loadstring decodes to: if love.system.getOS() == 'iOS' or 'Android' then love.event.quit() end
         patches.Add(new PatchConfig
         {
             FilePath = "globals.lua",
-            SearchPattern = "self:set_language",
-            Replacement = @"-- Mobile compatibility patch
+            SearchPattern = "loadstring",
+            Replacement = @"-- Mobile compatibility patch (removed loadstring that forced exit on mobile)
     if love.system.getOS() == 'Android' or love.system.getOS() == 'iOS' then
         self.F_SAVE_TIMER = 5
         self.F_DISCORD = true
@@ -422,11 +428,47 @@ public class BuildService : IBuildService
         self.F_ENGLISH_ONLY = false
         self.F_QUIT_BUTTON = false
     end
-    self:set_language",
-            Description = "Mobile compatibility patch"
+    --loadstring",
+            Description = "Mobile exit fix (CRITICAL)"
         });
 
-        // FPS cap patch
+        // 2. On-screen keyboard support for touch input
+        patches.Add(new PatchConfig
+        {
+            FilePath = "functions/button_callbacks.lua",
+            SearchPattern = "if G.CONTROLLER.text_input_hook == e and G.CONTROLLER.HID.controller then",
+            Replacement = "if G.CONTROLLER.text_input_hook == e and (G.CONTROLLER.HID.controller or G.CONTROLLER.HID.touch) then",
+            Description = "On-screen keyboard support"
+        });
+
+        // 3. Flame shader fix (required for most Android devices)
+        patches.Add(new PatchConfig
+        {
+            FilePath = "resources/shaders/flame.fs",
+            SearchPattern = "#endif\n\nextern",
+            Replacement = @"#endif
+#ifdef GL_ES
+	precision MY_HIGHP_OR_MEDIUMP float;
+#endif
+
+extern",
+            Description = "Flame shader GL_ES fix"
+        });
+
+        // 4. Flame shader function signature fix
+        patches.Add(new PatchConfig
+        {
+            FilePath = "resources/shaders/flame.fs",
+            SearchPattern = "vec4 effect( vec4 colour, Image texture, vec2 texture_coords, vec2 screen_coords )",
+            Replacement = "mediump vec4 effect( mediump vec4 colour, Image texture, mediump vec2 texture_coords, mediump vec2 screen_coords )",
+            Description = "Flame shader precision fix"
+        });
+
+        // =====================================================
+        // OPTIONAL PATCHES - User configurable
+        // =====================================================
+
+        // FPS cap patch - caps to device refresh rate for better battery
         if (config.FpsCap != FpsCap.None)
         {
             var fpsValue = config.FpsCap == FpsCap.Default
@@ -436,44 +478,66 @@ public class BuildService : IBuildService
             patches.Add(new PatchConfig
             {
                 FilePath = "main.lua",
-                SearchPattern = "G.FPS_CAP = G.FPS_CAP or",
-                Replacement = $"        G.FPS_CAP = {fpsValue}",
+                SearchPattern = "G.FPS_CAP = G.FPS_CAP or 500",
+                Replacement = $"G.FPS_CAP = G.FPS_CAP or {fpsValue}",
                 Description = "FPS cap configuration"
             });
         }
 
-        // High DPI patch
-        if (config.EnableHighDpi)
+        // Landscape lock - prevents portrait mode issues
+        if (config.EnableLandscape)
         {
             patches.Add(new PatchConfig
             {
-                FilePath = "conf.lua",
-                SearchPattern = "t.window.usedpiscale",
-                Replacement = "    t.window.usedpiscale = false",
-                Description = "High DPI configuration"
+                FilePath = "functions/button_callbacks.lua",
+                SearchPattern = "resizable = true,",
+                Replacement = "resizable = not (love.system.getOS() == 'Android' or love.system.getOS() == 'iOS'),",
+                Description = "Landscape orientation lock"
             });
         }
 
-        // CRT shader disable
+        // High DPI patches - better graphics on high-res devices
+        if (config.EnableHighDpi)
+        {
+            // Part 1: conf.lua - disable DPI scaling
+            patches.Add(new PatchConfig
+            {
+                FilePath = "conf.lua",
+                SearchPattern = "t.window.minheight = 100",
+                Replacement = "t.window.minheight = 100\n    t.window.usedpiscale = false",
+                Description = "High DPI conf.lua patch"
+            });
+
+            // Part 2: button_callbacks.lua - enable highdpi for mobile
+            patches.Add(new PatchConfig
+            {
+                FilePath = "functions/button_callbacks.lua",
+                SearchPattern = "highdpi = (love.system.getOS() == 'OS X')",
+                Replacement = "highdpi = (love.system.getOS() == 'OS X' or love.system.getOS() == 'Android' or love.system.getOS() == 'iOS')",
+                Description = "High DPI button_callbacks patch"
+            });
+        }
+
+        // CRT shader disable - required for Pixel and some other devices
         if (config.DisableCrtShader)
         {
             patches.Add(new PatchConfig
             {
-                FilePath = "globals.lua",
-                SearchPattern = "crt = ",
-                Replacement = "            crt = 0,",
+                FilePath = "game.lua",
+                SearchPattern = "love.graphics.setShader( G.SHADERS['CRT'])",
+                Replacement = "-- love.graphics.setShader( G.SHADERS['CRT']) -- Disabled for mobile compatibility",
                 Description = "CRT shader disable"
             });
         }
 
-        // External storage patch
+        // External storage patch (not recommended)
         if (config.EnableExternalStorage)
         {
             patches.Add(new PatchConfig
             {
                 FilePath = "conf.lua",
-                SearchPattern = "t.externalstorage",
-                Replacement = "    t.externalstorage = true",
+                SearchPattern = "t.window.minheight = 100",
+                Replacement = "t.window.minheight = 100\n    t.externalstorage = true",
                 Description = "External storage configuration"
             });
         }

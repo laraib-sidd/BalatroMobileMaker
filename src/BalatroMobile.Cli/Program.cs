@@ -38,6 +38,7 @@ internal class Program
             var enableLandscape = true;
             var enableHighDpi = false;
             var disableCrtShader = false;
+            var injectMods = false;
             var outputPath = "balatro.apk";
 
             // Simple argument parsing (could be improved with a proper CLI library)
@@ -76,6 +77,9 @@ internal class Program
                     case "--disable-crt":
                         disableCrtShader = true;
                         break;
+                    case "--inject-mods":
+                        injectMods = true;
+                        break;
                     case "--output":
                         if (i + 1 < args.Length)
                         {
@@ -93,6 +97,7 @@ internal class Program
                 EnableLandscape = enableLandscape,
                 EnableHighDpi = enableHighDpi,
                 DisableCrtShader = disableCrtShader,
+                InjectMods = injectMods,
                 OutputPath = outputPath
             };
 
@@ -104,15 +109,17 @@ internal class Program
             Console.WriteLine($"Landscape: {config.EnableLandscape}");
             Console.WriteLine($"High DPI: {config.EnableHighDpi}");
             Console.WriteLine($"Disable CRT: {config.DisableCrtShader}");
+            Console.WriteLine($"Inject Mods: {config.InjectMods}");
             Console.WriteLine($"Output: {config.OutputPath}");
             Console.WriteLine();
 
             // Create services (in real implementation, this would use dependency injection)
             var gameDetector = new GameDetector();
             var patchService = new PatchService();
+            var modInjectionService = new ModInjectionService();
             var javaTool = new JavaTool();
             var apkTool = new ApkTool(javaTool, "apktool.jar"); // Placeholder path
-            var buildService = new BuildService(gameDetector, patchService, apkTool, javaTool);
+            var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool);
 
             // Validate environment first
             Console.WriteLine("Validating build environment...");
@@ -191,6 +198,7 @@ internal class Program
         Console.WriteLine("  --no-landscape                         - Disable landscape lock");
         Console.WriteLine("  --high-dpi                             - Enable high DPI mode");
         Console.WriteLine("  --disable-crt                          - Disable CRT shader");
+        Console.WriteLine("  --inject-mods                          - Inject mods during build");
         Console.WriteLine("  --output <path>                        - Output file path");
         Console.WriteLine();
         Console.WriteLine("Examples:");

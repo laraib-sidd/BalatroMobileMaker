@@ -73,25 +73,41 @@ public class BuildService : IBuildService
             }
             messages.Add("Build environment validated");
 
-            // Step 2: Locate Balatro installation
-            progress?.Report("Locating Balatro...");
-            var balatroPath = await _gameDetector.GetGameInstallPathAsync();
-            if (string.IsNullOrEmpty(balatroPath))
+            // Step 2: Locate Balatro.exe or Game.love in current directory
+            progress?.Report("Locating game files...");
+            
+            // Check for game files in current directory
+            var currentDir = Environment.CurrentDirectory;
+            var balatroExePath = Path.Combine(currentDir, "Balatro.exe");
+            var gameLovePath = Path.Combine(currentDir, "Game.love");
+            
+            string gameFilePath;
+            if (File.Exists(balatroExePath))
             {
-                errors.Add("Balatro installation not found");
+                gameFilePath = balatroExePath;
+            }
+            else if (File.Exists(gameLovePath))
+            {
+                gameFilePath = gameLovePath;
+            }
+            else
+            {
+                errors.Add("Balatro.exe or Game.love not found in current directory");
+                errors.Add($"Please copy Balatro.exe to: {currentDir}");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
             
-            var balatroExePath = Path.Combine(balatroPath, "Balatro.exe");
-            Console.WriteLine($"  Source Balatro:     {balatroExePath} (READ ONLY - will not be modified)");
+            var gameFileInfo = new FileInfo(gameFilePath);
+            Console.WriteLine($"  Source file:        {gameFilePath}");
+            Console.WriteLine($"  File size:          {gameFileInfo.Length / 1024.0 / 1024.0:F2} MB");
             Console.WriteLine();
-            messages.Add($"Found Balatro at: {balatroPath}");
+            messages.Add($"Using game file: {Path.GetFileName(gameFilePath)} ({gameFileInfo.Length / 1024.0 / 1024.0:F2} MB)");
 
-            // Step 3: Extract game content from Balatro.exe
-            progress?.Report("Extracting game content from Balatro.exe (reading, not modifying)...");
+            // Step 3: Extract game content
+            progress?.Report($"Extracting game content from {Path.GetFileName(gameFilePath)}...");
             var extractPath = Path.Combine(tempDir, "extracted");
             
-            if (!await _gameExtractor.ExtractGameAsync(balatroExePath, extractPath))
+            if (!await _gameExtractor.ExtractGameAsync(gameFilePath, extractPath))
             {
                 errors.Add("Failed to extract game content from Balatro.exe");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);

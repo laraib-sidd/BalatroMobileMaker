@@ -18,52 +18,94 @@ public class GameExtractor
     }
 
     /// <summary>
-    /// Extracts game content from Balatro.exe to a directory.
+    /// Extracts game content from Balatro.exe or Game.love to a directory.
     /// Balatro.exe has ZIP data appended to the end of the executable.
     /// </summary>
-    public async Task<bool> ExtractGameAsync(string balatroExePath, string extractPath)
+    public async Task<bool> ExtractGameAsync(string gameFilePath, string extractPath)
     {
-        if (!File.Exists(balatroExePath))
+        if (!File.Exists(gameFilePath))
         {
-            ReportProgress($"Balatro.exe not found at: {balatroExePath}");
+            ReportProgress($"Game file not found at: {gameFilePath}");
             return false;
         }
+
+        var fileInfo = new FileInfo(gameFilePath);
+        ReportProgress($"Processing: {fileInfo.Name} ({fileInfo.Length / 1024.0 / 1024.0:F2} MB)");
 
         try
         {
             Directory.CreateDirectory(extractPath);
 
-            // First, check if there's already a Game.love file (some users have this)
-            var gameLovePath = Path.Combine(Path.GetDirectoryName(balatroExePath)!, "Game.love");
+            // Check if it's a .love file (which is just a ZIP)
+            if (gameFilePath.EndsWith(".love", StringComparison.OrdinalIgnoreCase))
+            {
+                ReportProgress("Extracting from Game.love...");
+                return await ExtractLoveFileAsync(gameFilePath, extractPath);
+            }
+
+            // Also check for Game.love in same directory
+            var gameLovePath = Path.Combine(Path.GetDirectoryName(gameFilePath)!, "Game.love");
             if (File.Exists(gameLovePath))
             {
-                ReportProgress("Found Game.love, extracting from it...");
+                ReportProgress("Found Game.love in same folder, using that instead...");
                 return await ExtractLoveFileAsync(gameLovePath, extractPath);
             }
 
-            // Balatro.exe is a LÖVE fused executable - it has ZIP data appended to the end
-            // We need to find where the ZIP starts (look for PK signature)
-            ReportProgress("Extracting game content from Balatro.exe...");
+            // Try to extract Balatro.exe directly as a ZIP first
+            // Some versions can be extracted directly
+            ReportProgress("Trying direct ZIP extraction...");
+            try
+            {
+                var fastZip = new FastZip();
+                fastZip.ExtractZip(gameFilePath, extractPath, null);
+                
+                var luaFiles = Directory.GetFiles(extractPath, "*.lua", SearchOption.AllDirectories);
+                if (luaFiles.Length > 0)
+                {
+                    ReportProgress($"Direct extraction successful! Found {luaFiles.Length} Lua files");
+                    return true;
+                }
+                
+                // Clear failed extraction
+                foreach (var file in Directory.GetFiles(extractPath, "*", SearchOption.AllDirectories))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+            }
+            catch
+            {
+                ReportProgress("Direct extraction failed, trying offset search...");
+            }
+
+            // Balatro.exe is a LÖVE fused executable - it has ZIP data appended
+            ReportProgress("Reading executable to find embedded game data...");
             
-            var exeBytes = await File.ReadAllBytesAsync(balatroExePath);
+            var exeBytes = await File.ReadAllBytesAsync(gameFilePath);
+            ReportProgress($"Read {exeBytes.Length:N0} bytes");
+            
             var zipStartOffset = FindZipStartOffset(exeBytes);
             
             if (zipStartOffset == -1)
             {
-                ReportProgress("Could not find ZIP data in Balatro.exe");
+                ReportProgress("ERROR: Could not find ZIP data in executable");
+                ReportProgress("The file might be corrupted or in an unsupported format.");
+                ReportProgress("Try copying a fresh Balatro.exe from Steam.");
                 return false;
             }
 
-            ReportProgress($"Found ZIP data at offset {zipStartOffset}");
+            var zipSize = exeBytes.Length - zipStartOffset;
+            ReportProgress($"Extracting {zipSize / 1024.0 / 1024.0:F2} MB of game data...");
 
             // Extract just the ZIP portion to a temp file
-            var tempZipPath = Path.Combine(Path.GetTempPath(), "balatro_temp.zip");
+            var tempZipPath = Path.Combine(Path.GetTempPath(), $"balatro_extract_{Guid.NewGuid()}.zip");
             try
             {
                 await using (var fs = File.Create(tempZipPath))
                 {
-                    await fs.WriteAsync(exeBytes, zipStartOffset, exeBytes.Length - zipStartOffset);
+                    await fs.WriteAsync(exeBytes, zipStartOffset, zipSize);
                 }
+                
+                ReportProgress($"Created temp ZIP: {tempZipPath}");
 
                 // Now extract the ZIP using SharpZipLib
                 var fastZip = new FastZip();
@@ -73,12 +115,18 @@ public class GameExtractor
                 var luaFiles = Directory.GetFiles(extractPath, "*.lua", SearchOption.AllDirectories);
                 if (luaFiles.Length == 0)
                 {
-                    ReportProgress("Warning: No Lua files found after extraction");
+                    ReportProgress("ERROR: No Lua files found after extraction");
+                    ReportProgress("The ZIP data might be corrupted or in wrong format.");
                     return false;
                 }
 
-                ReportProgress($"Extracted {luaFiles.Length} Lua files");
+                ReportProgress($"SUCCESS: Extracted {luaFiles.Length} Lua files");
                 return true;
+            }
+            catch (Exception ex)
+            {
+                ReportProgress($"ZIP extraction failed: {ex.Message}");
+                return false;
             }
             finally
             {
@@ -92,6 +140,7 @@ public class GameExtractor
         catch (Exception ex)
         {
             ReportProgress($"Extraction failed: {ex.Message}");
+            ReportProgress($"Stack: {ex.StackTrace}");
             return false;
         }
     }
@@ -184,34 +233,40 @@ public class GameExtractor
         // ZIP local file header signature: PK\x03\x04
         byte[] zipSignature = { 0x50, 0x4B, 0x03, 0x04 };
         
-        // Start searching from a reasonable offset (skip the PE header)
-        // LÖVE executables are usually around 3-5MB, game data starts after
-        int startSearch = Math.Min(1024 * 1024, data.Length / 2); // Start at 1MB or half
+        ReportProgress($"Searching for ZIP signature in {data.Length:N0} bytes...");
         
-        for (int i = startSearch; i < data.Length - 4; i++)
+        // Search from the beginning - the ZIP might be anywhere
+        // We want the LAST occurrence since game data is appended to the end
+        int lastFound = -1;
+        
+        for (int i = 0; i < data.Length - 4; i++)
         {
             if (data[i] == zipSignature[0] &&
                 data[i + 1] == zipSignature[1] &&
                 data[i + 2] == zipSignature[2] &&
                 data[i + 3] == zipSignature[3])
             {
-                return i;
+                // Verify this looks like a valid ZIP by checking for common patterns
+                // The filename length is at offset 26-27 from the signature
+                if (i + 30 < data.Length)
+                {
+                    int filenameLen = data[i + 26] | (data[i + 27] << 8);
+                    // Sanity check: filename should be reasonable length
+                    if (filenameLen > 0 && filenameLen < 256)
+                    {
+                        lastFound = i;
+                        // Don't break - we want the last valid ZIP (in case there are multiple)
+                    }
+                }
             }
         }
-
-        // If not found in second half, try from beginning (smaller games)
-        for (int i = 0; i < startSearch && i < data.Length - 4; i++)
+        
+        if (lastFound != -1)
         {
-            if (data[i] == zipSignature[0] &&
-                data[i + 1] == zipSignature[1] &&
-                data[i + 2] == zipSignature[2] &&
-                data[i + 3] == zipSignature[3])
-            {
-                return i;
-            }
+            ReportProgress($"Found ZIP signature at offset {lastFound:N0}");
         }
-
-        return -1;
+        
+        return lastFound;
     }
 
     private void ReportProgress(string message)

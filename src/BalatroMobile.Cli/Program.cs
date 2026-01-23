@@ -593,32 +593,49 @@ internal class Program
         Console.WriteLine("=====================================");
         Console.WriteLine();
 
-        // Check if Balatro is installed first
-        var gameDetector = new GameDetector();
-        var balatroPath = await gameDetector.GetGameInstallPathAsync();
+        // Check if Balatro.exe is in the current directory
+        var currentDir = Environment.CurrentDirectory;
+        var balatroExePath = Path.Combine(currentDir, "Balatro.exe");
+        var gameLovePath = Path.Combine(currentDir, "Game.love");
         
-        if (string.IsNullOrEmpty(balatroPath))
+        if (!File.Exists(balatroExePath) && !File.Exists(gameLovePath))
         {
-            Console.WriteLine("Balatro installation not found in default locations.");
-            var userPath = AskForPath(
-                "Please enter the path to your Balatro folder (containing Balatro.exe):",
-                @"Example: D:\SteamLibrary\steamapps\common\Balatro",
-                path => File.Exists(Path.Combine(path, "Balatro.exe"))
-            );
-            
-            if (string.IsNullOrEmpty(userPath))
-            {
-                Console.WriteLine("Cannot proceed without Balatro installation.");
-                WaitForKeyPress();
-                return;
-            }
-            
-            GameDetector.OverrideGamePath = userPath;
-            balatroPath = userPath;
+            Console.WriteLine("┌─────────────────────────────────────────────────────────────────┐");
+            Console.WriteLine("│  Balatro.exe not found in current folder!                       │");
+            Console.WriteLine("│                                                                 │");
+            Console.WriteLine("│  Please copy Balatro.exe here:                                  │");
+            Console.WriteLine("│                                                                 │");
+            Console.WriteLine("│  1. Open Steam                                                  │");
+            Console.WriteLine("│  2. Right-click 'Balatro' in your library                       │");
+            Console.WriteLine("│  3. Click 'Manage' -> 'Browse local files'                      │");
+            Console.WriteLine("│  4. Copy 'Balatro.exe' to this folder:                          │");
+            Console.WriteLine($"│     {currentDir,-55} │");
+            Console.WriteLine("│  5. Run BalatroMobile.exe again                                 │");
+            Console.WriteLine("│                                                                 │");
+            Console.WriteLine("│  NOTE: Your original game files are NOT modified.               │");
+            Console.WriteLine("│        We work with the copy you provide.                       │");
+            Console.WriteLine("└─────────────────────────────────────────────────────────────────┘");
+            Console.WriteLine();
+            WaitForKeyPress();
+            return;
         }
-        
-        Console.WriteLine($"Found Balatro at: {balatroPath}");
+
+        var gameFile = File.Exists(balatroExePath) ? "Balatro.exe" : "Game.love";
+        Console.WriteLine($"Found {gameFile} in current folder - ready to build!");
         Console.WriteLine();
+        
+        // Check for mods
+        var gameDetector = new GameDetector();
+        if (gameDetector.HasModsInstalled())
+        {
+            Console.WriteLine($"Mods folder: {gameDetector.GetModsFolderPath()}");
+            if (gameDetector.HasLovelyDump())
+            {
+                var dumpFiles = Directory.GetFiles(gameDetector.GetLovelyDumpPath(), "*.lua", SearchOption.AllDirectories);
+                Console.WriteLine($"Lovely dump: {dumpFiles.Length} Lua files found");
+            }
+            Console.WriteLine();
+        }
 
         // Show default configuration and ask if user wants quick build or customize
         Console.WriteLine("=== DEFAULT BUILD SETTINGS ===");

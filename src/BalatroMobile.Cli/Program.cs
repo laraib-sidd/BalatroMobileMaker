@@ -1,4 +1,4 @@
-﻿using BalatroMobile.Configuration.Services;
+using BalatroMobile.Configuration.Services;
 using BalatroMobile.Core.Services;
 using BalatroMobile.Core.Services.GameDetection;
 
@@ -108,7 +108,6 @@ internal class GameDetector : IGameDetector
     public Task<string?> GetGameInstallPathAsync() => Task.FromResult<string?>("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Balatro");
     public Task<bool> IsGameWorkingAsync() => Task.FromResult(true);
 }
-
 
 internal class PlatformDetector : IPlatformDetector
 {

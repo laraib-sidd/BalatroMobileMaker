@@ -123,14 +123,14 @@ The pre-flight check validates the following requirements:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/BalatroMobile.git
+git clone https://github.com/laraib-sidd/BalatroMobileMaker.git
 cd BalatroMobile
 
 # Build the solution
 dotnet build
 
 # Run the application
-dotnet run --project BalatroMobile.Cli -- check
+dotnet run --project src/BalatroMobile.Cli -- check
 ```
 
 ## 📁 Project Structure
@@ -163,7 +163,7 @@ Create an `appsettings.json` file in the Cli project directory to customize tool
 
 1. Fork the repository
 2. Create a feature branch
-3. Run pre-flight checks: `dotnet run --project BalatroMobile.Cli -- check`
+3. Run pre-flight checks: `dotnet run --project src/BalatroMobile.Cli -- check`
 4. Implement your changes
 5. Add tests and ensure they pass
 6. Submit a pull request
@@ -203,9 +203,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ### Getting Help
 
-- Check the [Issues](https://github.com/your-org/BalatroMobile/issues) page
+- Check the [Issues](https://github.com/laraib-sidd/BalatroMobileMaker/issues) page
 - Join the [Balatro Modding Discord](https://discord.gg/balatro)
-- Read the [Balatro Mobile Modding Guide](https://github.com/your-org/BalatroMobile/wiki)
+- Read the [Balatro Mobile Modding Guide](https://github.com/laraib-sidd/BalatroMobileMaker/wiki)
 
 ---
 

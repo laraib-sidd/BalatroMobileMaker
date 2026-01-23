@@ -15,8 +15,7 @@ public record BuildConfig
 
 public enum Platform
 {
-    Android,
-    Ios
+    Android
 }
 
 public enum FpsCap

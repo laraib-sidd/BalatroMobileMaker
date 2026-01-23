@@ -359,12 +359,11 @@ internal class Program
 
         // Check for existing builds
         string existingApk = "balatro.apk";
-        string existingIpa = "balatro.ipa";
-        bool hasExistingBuild = File.Exists(existingApk) || File.Exists(existingIpa);
+        bool hasExistingBuild = File.Exists(existingApk);
 
         if (hasExistingBuild)
         {
-            Console.WriteLine($"Found existing build: {(File.Exists(existingApk) ? existingApk : existingIpa)}");
+            Console.WriteLine($"Found existing build: {existingApk}");
             bool rebuild = AskYesNo("Would you like to build again?", true);
             if (!rebuild)
             {
@@ -374,18 +373,10 @@ internal class Program
             }
         }
 
-        // Platform selection
+        // Platform info
         Console.WriteLine("NOTE: ADB is NOT required for building modded APKs - only for save transfer.");
+        Console.WriteLine("Building for Android...");
         Console.WriteLine();
-        bool buildAndroid = AskYesNo("Would you like to build for Android?", true);
-        bool buildIos = AskYesNo("Would you like to build for iOS (experimental)?", false);
-
-        if (!buildAndroid && !buildIos)
-        {
-            Console.WriteLine("No platform selected. Exiting...");
-            WaitForKeyPress();
-            return;
-        }
 
         // Check if Balatro is installed - if not, prompt for path
         Console.WriteLine();
@@ -424,13 +415,6 @@ internal class Program
 
         // Configure build options interactively (like original patching questions)
         var buildArgs = new List<string>();
-
-        // Set platform
-        if (!buildAndroid && buildIos)
-        {
-            buildArgs.Add("--platform");
-            buildArgs.Add("ios");
-        }
 
         // FPS patch question (like original)
         bool applyFpsPatch = AskYesNo("Would you like to apply the FPS cap patch?", true);
@@ -506,10 +490,9 @@ internal class Program
         // Also validate default path if user didn't specify custom
         if (string.IsNullOrEmpty(outputFile))
         {
-            var defaultPath = buildAndroid ? "balatro.apk" : "balatro.ipa";
-            if (File.Exists(defaultPath))
+            if (File.Exists("balatro.apk"))
             {
-                bool overwrite = AskYesNo($"Default output '{defaultPath}' already exists. Overwrite?", true);
+                bool overwrite = AskYesNo("Default output 'balatro.apk' already exists. Overwrite?", true);
                 if (!overwrite)
                 {
                     Console.WriteLine("Build cancelled - please specify a different output filename.");
@@ -522,7 +505,7 @@ internal class Program
         // Show configuration summary
         Console.WriteLine();
         Console.WriteLine("Build configuration:");
-        Console.WriteLine($"Platform: {(buildAndroid ? "Android" : "iOS")}");
+        Console.WriteLine("Platform: Android");
         Console.WriteLine($"FPS Patch: {(applyFpsPatch ? "Yes" : "No")}");
         Console.WriteLine($"Landscape Patch: {(applyLandscapePatch ? "Yes" : "No")}");
         Console.WriteLine($"High DPI Patch: {(applyHighDpiPatch ? "Yes" : "No")}");
@@ -544,7 +527,7 @@ internal class Program
         await RunBuild(buildArgs.ToArray());
 
         // Post-build options (like original)
-        if (buildAndroid && File.Exists("balatro.apk"))
+        if (File.Exists("balatro.apk"))
         {
             Console.WriteLine();
             bool autoInstall = AskYesNo("Would you like to automatically install balatro.apk on your Android device?", false);
@@ -640,7 +623,6 @@ internal class Program
         Console.WriteLine("  BalatroMobile transfer [options]     - Transfer saves between PC and Android");
         Console.WriteLine();
         Console.WriteLine("Build Options:");
-        Console.WriteLine("  --platform <android|ios>            - Target platform (default: android)");
         Console.WriteLine("  --fps <default|none|60>             - FPS cap (default: default)");
         Console.WriteLine("  --no-landscape                       - Disable landscape lock");
         Console.WriteLine("  --high-dpi                           - Enable high DPI mode");

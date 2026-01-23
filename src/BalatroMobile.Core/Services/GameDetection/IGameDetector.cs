@@ -4,7 +4,6 @@ public interface IGameDetector
 {
     Task<bool> IsSteamBalatroInstalledAsync();
     Task<string?> GetGameInstallPathAsync();
-    Task<bool> IsGameWorkingAsync();
 }
 
 public interface IModValidator

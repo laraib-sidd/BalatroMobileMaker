@@ -154,26 +154,4 @@ public class GameDetector : IGameDetector
 
         return libraries;
     }
-
-    public async Task<bool> IsGameWorkingAsync()
-    {
-        try
-        {
-            var gamePath = await GetGameInstallPathAsync();
-            if (string.IsNullOrEmpty(gamePath))
-                return false;
-
-            var exePath = Path.Combine(gamePath, "Balatro.exe");
-            if (!File.Exists(exePath))
-                return false;
-
-            // Try to get file version info to verify it's a valid executable
-            var versionInfo = FileVersionInfo.GetVersionInfo(exePath);
-            return versionInfo.ProductName?.Contains("Balatro", StringComparison.OrdinalIgnoreCase) == true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

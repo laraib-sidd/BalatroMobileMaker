@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace BalatroMobile.Infrastructure.Tools;
 
@@ -59,14 +60,42 @@ public class ApkTool : IApkTool
 
     public async Task<bool> IsAvailableAsync()
     {
+        // #region agent log
+        var debugLogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BalatroMobile", "debug.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(debugLogPath)!);
+        void Log(string hyp, string msg, object? data = null) { try { File.AppendAllText(debugLogPath, System.Text.Json.JsonSerializer.Serialize(new { hypothesisId = hyp, location = "ApkTool.cs:IsAvailableAsync", message = msg, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { } }
+        // #endregion
+
+        // #region agent log
+        Log("C", "ApkTool jar path check", new { jarPath = _apkToolJarPath, exists = File.Exists(_apkToolJarPath) });
+        // #endregion
+
         if (!File.Exists(_apkToolJarPath))
         {
+            // #region agent log
+            Log("C", "ApkTool jar NOT FOUND - returning false");
+            // #endregion
             return false;
         }
 
         var testArgs = $"-jar \"{_apkToolJarPath}\" --version";
+        // #region agent log
+        Log("C", "Running ApkTool version check", new { testArgs });
+        // #endregion
+
         var result = await _javaTool.ExecuteAndCaptureOutputAsync(testArgs);
-        return !string.IsNullOrEmpty(result) && !result.Contains("Error");
+
+        // #region agent log
+        Log("C", "ApkTool version check result", new { resultLength = result?.Length ?? 0, resultPreview = result?.Substring(0, Math.Min(300, result?.Length ?? 0)), containsError = result?.Contains("Error") ?? false });
+        // #endregion
+
+        var isAvailable = !string.IsNullOrEmpty(result) && !result.Contains("Error");
+
+        // #region agent log
+        Log("C", "ApkTool availability decision", new { isAvailable });
+        // #endregion
+
+        return isAvailable;
     }
 
     public string GetVersion()

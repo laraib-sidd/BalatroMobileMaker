@@ -109,14 +109,33 @@ public class ToolsManager
     }
 
     /// <summary>
-    /// Checks if Java is available (either bundled or system).
+    /// Checks if Java is available (either bundled or system) and can actually run.
     /// </summary>
     public bool IsJavaAvailable()
     {
-        // Check bundled Java first
+        // Check bundled Java first - must exist AND be able to run
         if (File.Exists(JavaPath))
         {
-            return true;
+            try
+            {
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = JavaPath,
+                    Arguments = "-version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+                
+                process?.WaitForExit(10000);
+                return process?.ExitCode == 0;
+            }
+            catch
+            {
+                // Bundled Java exists but can't run - fall through to system check
+                ReportProgress($"Warning: Bundled Java exists but failed to run: {JavaPath}");
+            }
         }
 
         // Check system Java

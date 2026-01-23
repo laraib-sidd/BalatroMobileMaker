@@ -164,12 +164,38 @@ internal class Program
             var apkTool = new ApkTool(javaTool, toolsManager.ApkToolPath, toolsManager.UberApkSignerPath);
             var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool, toolsManager.Love2dApkPath);
 
-            // Validate environment first
+            // Validate environment first with detailed reporting
             Console.WriteLine("Validating build environment...");
+            
+            // Check each component individually for better error messages
+            Console.WriteLine($"  Java path: {toolsManager.GetJavaExecutablePath()}");
+            Console.WriteLine($"  Java exists: {File.Exists(toolsManager.GetJavaExecutablePath())}");
+            Console.WriteLine($"  APKTool path: {toolsManager.ApkToolPath}");
+            Console.WriteLine($"  APKTool exists: {File.Exists(toolsManager.ApkToolPath)}");
+            Console.WriteLine($"  Love2D path: {toolsManager.Love2dApkPath}");
+            Console.WriteLine($"  Love2D exists: {File.Exists(toolsManager.Love2dApkPath)}");
+            
+            // Test Java can actually run
+            Console.WriteLine("  Testing Java...");
+            var javaTestResult = await javaTool.IsAvailableAsync();
+            Console.WriteLine($"  Java works: {javaTestResult}");
+            
+            // Test APKTool
+            Console.WriteLine("  Testing APKTool...");
+            var apkToolTestResult = await apkTool.IsAvailableAsync();
+            Console.WriteLine($"  APKTool works: {apkToolTestResult}");
+            
             if (!await buildService.ValidateBuildEnvironmentAsync())
             {
+                Console.WriteLine();
                 Console.WriteLine("ERROR: Build environment validation failed!");
-                Console.WriteLine("Please run 'BalatroMobile check' to see what needs to be fixed.");
+                Console.WriteLine();
+                Console.WriteLine("Debug info:");
+                Console.WriteLine($"  - Java available: {javaTestResult}");
+                Console.WriteLine($"  - APKTool available: {apkToolTestResult}");
+                Console.WriteLine($"  - Balatro found: {await gameDetector.GetGameInstallPathAsync() != null}");
+                Console.WriteLine();
+                Console.WriteLine("Check the debug log at: %LOCALAPPDATA%\\BalatroMobile\\debug.log");
                 return;
             }
             Console.WriteLine("OK: Build environment validated");

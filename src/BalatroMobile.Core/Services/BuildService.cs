@@ -40,13 +40,29 @@ public class BuildService : IBuildService
         var messages = new List<string>();
         var errors = new List<string>();
         
-        // Use a persistent temp directory for debugging
+        // Temp directory for build process (in system temp, auto-cleaned)
         var tempDir = Path.Combine(Path.GetTempPath(), "BalatroMobile", $"build_{DateTime.Now:yyyyMMdd_HHmmss}");
         Directory.CreateDirectory(tempDir);
 
         try
         {
             progress?.Report("Starting build process...");
+            
+            // Show where output will go
+            var outputPath = config.OutputPath;
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                outputPath = "balatro.apk";
+            }
+            if (!Path.IsPathRooted(outputPath))
+            {
+                outputPath = Path.Combine(Environment.CurrentDirectory, outputPath);
+            }
+            Console.WriteLine();
+            Console.WriteLine("=== BUILD PATHS ===");
+            Console.WriteLine($"  Output APK will be: {outputPath}");
+            Console.WriteLine($"  Temp work folder:   {tempDir}");
+            Console.WriteLine();
 
             // Step 1: Validate build environment
             progress?.Report("Validating build environment...");
@@ -65,12 +81,15 @@ public class BuildService : IBuildService
                 errors.Add("Balatro installation not found");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
+            
+            var balatroExePath = Path.Combine(balatroPath, "Balatro.exe");
+            Console.WriteLine($"  Source Balatro:     {balatroExePath} (READ ONLY - will not be modified)");
+            Console.WriteLine();
             messages.Add($"Found Balatro at: {balatroPath}");
 
             // Step 3: Extract game content from Balatro.exe
-            progress?.Report("Extracting game content from Balatro.exe...");
+            progress?.Report("Extracting game content from Balatro.exe (reading, not modifying)...");
             var extractPath = Path.Combine(tempDir, "extracted");
-            var balatroExePath = Path.Combine(balatroPath, "Balatro.exe");
             
             if (!await _gameExtractor.ExtractGameAsync(balatroExePath, extractPath))
             {
@@ -80,6 +99,8 @@ public class BuildService : IBuildService
             
             // Verify extraction
             var extractedLuaFiles = Directory.GetFiles(extractPath, "*.lua", SearchOption.AllDirectories);
+            Console.WriteLine($"  Extracted to temp:  {extractPath}");
+            Console.WriteLine($"  Files extracted:    {extractedLuaFiles.Length} Lua files");
             messages.Add($"Extracted {extractedLuaFiles.Length} Lua files");
             
             if (extractedLuaFiles.Length == 0)
@@ -88,8 +109,8 @@ public class BuildService : IBuildService
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
 
-            // Step 4: Apply patches to the extracted game files
-            progress?.Report("Applying patches...");
+            // Step 4: Apply patches to the extracted game files (NOT the original)
+            progress?.Report("Applying patches to extracted files...");
             var patches = GetPatchesForConfig(config);
             var patchResults = await _patchService.ApplyPatchesAsync(patches, extractPath);
 

@@ -224,7 +224,14 @@ internal class Program
             var javaPath = toolsManager.GetJavaExecutablePath();
             var javaTool = new JavaTool(javaPath);
             var apkTool = new ApkTool(javaTool, toolsManager.ApkToolPath, toolsManager.UberApkSignerPath);
-            var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool, toolsManager.Love2dApkPath);
+            var buildService = new BuildService(
+                gameDetector, 
+                patchService, 
+                modInjectionService, 
+                apkTool, 
+                javaTool, 
+                toolsManager.Love2dApkPath,
+                toolsManager.BalatroApkPatchPath);
 
             // Log Balatro detection
             var balatroPath = await gameDetector.GetGameInstallPathAsync();

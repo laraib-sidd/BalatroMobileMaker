@@ -12,6 +12,8 @@ public class BuildService : IBuildService
     private readonly IApkTool _apkTool;
     private readonly IJavaTool _javaTool;
     private readonly string? _love2dApkPath;
+    private readonly string? _balatroApkPatchPath;
+    private readonly GameExtractor _gameExtractor;
 
     public BuildService(
         IGameDetector gameDetector,
@@ -19,7 +21,8 @@ public class BuildService : IBuildService
         IModInjectionService modInjectionService,
         IApkTool apkTool,
         IJavaTool javaTool,
-        string? love2dApkPath = null)
+        string? love2dApkPath = null,
+        string? balatroApkPatchPath = null)
     {
         _gameDetector = gameDetector;
         _patchService = patchService;
@@ -27,6 +30,8 @@ public class BuildService : IBuildService
         _apkTool = apkTool;
         _javaTool = javaTool;
         _love2dApkPath = love2dApkPath;
+        _balatroApkPatchPath = balatroApkPatchPath;
+        _gameExtractor = new GameExtractor(msg => Console.WriteLine($"  [Extract] {msg}"));
     }
 
     public async Task<BuildResult> BuildAsync(BuildConfig config, IProgress<string>? progress = null)
@@ -34,6 +39,10 @@ public class BuildService : IBuildService
         var startTime = DateTime.Now;
         var messages = new List<string>();
         var errors = new List<string>();
+        
+        // Use a persistent temp directory for debugging
+        var tempDir = Path.Combine(Path.GetTempPath(), "BalatroMobile", $"build_{DateTime.Now:yyyyMMdd_HHmmss}");
+        Directory.CreateDirectory(tempDir);
 
         try
         {
@@ -48,22 +57,38 @@ public class BuildService : IBuildService
             }
             messages.Add("Build environment validated");
 
-            // Step 2: Locate and extract Balatro
-            progress?.Report("Locating and extracting Balatro...");
+            // Step 2: Locate Balatro installation
+            progress?.Report("Locating Balatro...");
             var balatroPath = await _gameDetector.GetGameInstallPathAsync();
             if (string.IsNullOrEmpty(balatroPath))
             {
                 errors.Add("Balatro installation not found");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
+            messages.Add($"Found Balatro at: {balatroPath}");
 
-            var extractPath = Path.Combine(Path.GetTempPath(), "BalatroMobile", Guid.NewGuid().ToString());
-            Directory.CreateDirectory(extractPath);
+            // Step 3: Extract game content from Balatro.exe
+            progress?.Report("Extracting game content from Balatro.exe...");
+            var extractPath = Path.Combine(tempDir, "extracted");
+            var balatroExePath = Path.Combine(balatroPath, "Balatro.exe");
+            
+            if (!await _gameExtractor.ExtractGameAsync(balatroExePath, extractPath))
+            {
+                errors.Add("Failed to extract game content from Balatro.exe");
+                return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
+            }
+            
+            // Verify extraction
+            var extractedLuaFiles = Directory.GetFiles(extractPath, "*.lua", SearchOption.AllDirectories);
+            messages.Add($"Extracted {extractedLuaFiles.Length} Lua files");
+            
+            if (extractedLuaFiles.Length == 0)
+            {
+                errors.Add("No Lua files found after extraction - extraction may have failed");
+                return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
+            }
 
-            await ExtractBalatroAsync(balatroPath, extractPath);
-            messages.Add("Balatro extracted successfully");
-
-            // Step 3: Apply patches
+            // Step 4: Apply patches to the extracted game files
             progress?.Report("Applying patches...");
             var patches = GetPatchesForConfig(config);
             var patchResults = await _patchService.ApplyPatchesAsync(patches, extractPath);
@@ -76,51 +101,50 @@ public class BuildService : IBuildService
                 }
                 else
                 {
-                    errors.Add($"Failed to apply patch '{patchResult.Description}': {patchResult.Error}");
+                    // Log warning but continue - some patches might not apply to all versions
+                    messages.Add($"Note: Patch '{patchResult.Description}' skipped: {patchResult.Error}");
                 }
             }
 
-            // Step 4: Package game
-            progress?.Report("Packaging game...");
-            var gamePackagePath = await PackageGameAsync(extractPath);
-            if (string.IsNullOrEmpty(gamePackagePath))
+            // Step 5: Create game.love from patched content
+            progress?.Report("Creating game.love package...");
+            var gameLovePath = Path.Combine(tempDir, "game.love");
+            
+            if (!await _gameExtractor.CreateGameLoveAsync(extractPath, gameLovePath))
             {
-                errors.Add("Failed to package game");
+                errors.Add("Failed to create game.love package");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
-            messages.Add("Game packaged successfully");
+            
+            var gameLoveInfo = new FileInfo(gameLovePath);
+            messages.Add($"Created game.love: {gameLoveInfo.Length / 1024.0 / 1024.0:F2} MB");
 
-            // Step 5: Build APK/IPA
-            progress?.Report("Building mobile package...");
-            var outputPath = await BuildMobilePackageAsync(config, gamePackagePath);
+            // Step 6: Build APK
+            progress?.Report("Building Android APK...");
+            var outputPath = await BuildAndroidApkAsync(config, gameLovePath, tempDir);
             if (string.IsNullOrEmpty(outputPath))
             {
-                errors.Add("Failed to build mobile package");
+                errors.Add("Failed to build Android APK");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
-            messages.Add($"Mobile package built: {outputPath}");
-
-            // Note: Mod injection happens inside BuildAndroidApkAsync via InjectModsIntoApkAsync
-            // when config.InjectMods is true - mods are bundled directly into the APK
-
-            // Cleanup
-            try
-            {
-                Directory.Delete(extractPath, true);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
+            
+            var apkInfo = new FileInfo(outputPath);
+            messages.Add($"Built APK: {apkInfo.Length / 1024.0 / 1024.0:F2} MB");
 
             progress?.Report("Build completed successfully!");
             return CreateResult(true, outputPath, messages, errors, DateTime.Now - startTime);
-
         }
         catch (Exception ex)
         {
             errors.Add($"Build failed with exception: {ex.Message}");
+            errors.Add($"Stack trace: {ex.StackTrace}");
             return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
+        }
+        finally
+        {
+            // Optionally cleanup temp directory
+            // For now, keep it for debugging
+            // try { Directory.Delete(tempDir, true); } catch { }
         }
     }
 
@@ -140,36 +164,8 @@ public class BuildService : IBuildService
         return new[] { "Android" };
     }
 
-    private async Task ExtractBalatroAsync(string balatroPath, string extractPath)
+    private async Task<string?> BuildAndroidApkAsync(BuildConfig config, string gameLovePath, string tempDir)
     {
-        // For now, just copy the Balatro.exe - in a real implementation
-        // this would extract the game files from the executable
-        var exePath = Path.Combine(balatroPath, "Balatro.exe");
-        if (File.Exists(exePath))
-        {
-            File.Copy(exePath, Path.Combine(extractPath, "Balatro.exe"));
-        }
-    }
-
-    private async Task<string?> PackageGameAsync(string extractPath)
-    {
-        // Placeholder - would compress game files into .love format
-        var lovePath = Path.Combine(Path.GetTempPath(), "game.love");
-        // In real implementation, this would create a .love file from the extracted game
-        return lovePath;
-    }
-
-    private async Task<string?> BuildMobilePackageAsync(BuildConfig config, string gamePackagePath)
-    {
-        // Android is the only supported platform
-        return await BuildAndroidApkAsync(config, gamePackagePath);
-    }
-
-    private async Task<string?> BuildAndroidApkAsync(BuildConfig config, string gamePackagePath)
-    {
-        var tempDir = Path.Combine(Path.GetTempPath(), "BalatroMobile", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-
         try
         {
             var outputPath = config.OutputPath;
@@ -178,79 +174,133 @@ public class BuildService : IBuildService
                 outputPath = "balatro.apk";
             }
 
+            // Make output path absolute if relative
+            if (!Path.IsPathRooted(outputPath))
+            {
+                outputPath = Path.Combine(Environment.CurrentDirectory, outputPath);
+            }
+
             // Step 1: Get base APK path
             var baseApkPath = _love2dApkPath;
             if (string.IsNullOrEmpty(baseApkPath) || !File.Exists(baseApkPath))
             {
-                // Fall back to looking in temp dir (for backwards compatibility)
-                baseApkPath = Path.Combine(tempDir, "love-11.5-android-embed.apk");
+                Console.WriteLine($"ERROR: Love2D APK not found at: {baseApkPath}");
+                return null;
             }
-            
-            if (!File.Exists(baseApkPath))
-            {
-                return null; // Love2D APK not found
-            }
+            Console.WriteLine($"Using base APK: {baseApkPath} ({new FileInfo(baseApkPath).Length / 1024.0 / 1024.0:F2} MB)");
 
             // Step 2: Decompile APK
+            Console.WriteLine("Decompiling APK with APKTool...");
             var decompiledPath = Path.Combine(tempDir, "decompiled");
             var decompileSuccess = await _apkTool.DecompileAsync(baseApkPath, decompiledPath);
             if (!decompileSuccess)
             {
+                Console.WriteLine("ERROR: Failed to decompile APK");
+                return null;
+            }
+            Console.WriteLine($"Decompiled to: {decompiledPath}");
+
+            // Step 3: Copy game.love to assets
+            Console.WriteLine("Adding game.love to APK assets...");
+            var assetsPath = Path.Combine(decompiledPath, "assets");
+            Directory.CreateDirectory(assetsPath);
+            var targetGameLovePath = Path.Combine(assetsPath, "game.love");
+            
+            if (File.Exists(gameLovePath))
+            {
+                File.Copy(gameLovePath, targetGameLovePath, true);
+                var loveSizeAfterCopy = new FileInfo(targetGameLovePath).Length;
+                Console.WriteLine($"Copied game.love: {loveSizeAfterCopy / 1024.0 / 1024.0:F2} MB");
+            }
+            else
+            {
+                Console.WriteLine($"ERROR: game.love not found at: {gameLovePath}");
                 return null;
             }
 
-            // Step 3: Copy game.love to assets
-            var assetsPath = Path.Combine(decompiledPath, "assets");
-            Directory.CreateDirectory(assetsPath);
-            var gameLovePath = Path.Combine(assetsPath, "game.love");
-            if (File.Exists(gamePackagePath))
+            // Step 4: Apply Balatro APK patches if available
+            if (!string.IsNullOrEmpty(_balatroApkPatchPath) && Directory.Exists(_balatroApkPatchPath))
             {
-                File.Copy(gamePackagePath, gameLovePath, true);
+                Console.WriteLine("Applying Balatro APK patches...");
+                await ApplyBalatroApkPatchesAsync(decompiledPath);
             }
 
-            // Step 4: Inject mods if requested
+            // Step 5: Inject mods if requested
             if (config.InjectMods)
             {
+                Console.WriteLine("Injecting mods...");
                 await InjectModsIntoApkAsync(config, decompiledPath);
             }
 
-            // Step 5: Apply AndroidManifest patches
+            // Step 6: Apply AndroidManifest patches
+            Console.WriteLine("Patching AndroidManifest...");
             await ApplyAndroidManifestPatchesAsync(decompiledPath);
 
-            // Step 6: Recompile APK
+            // Step 7: Recompile APK
+            Console.WriteLine("Recompiling APK...");
             var unsignedApkPath = Path.Combine(tempDir, "unsigned.apk");
             var recompileSuccess = await _apkTool.CompileAsync(decompiledPath, unsignedApkPath);
             if (!recompileSuccess)
             {
+                Console.WriteLine("ERROR: Failed to recompile APK");
                 return null;
             }
+            Console.WriteLine($"Recompiled APK: {new FileInfo(unsignedApkPath).Length / 1024.0 / 1024.0:F2} MB");
 
-            // Step 7: Sign APK
+            // Step 8: Sign APK
+            Console.WriteLine("Signing APK...");
             var signSuccess = await _apkTool.SignAsync(unsignedApkPath);
-            if (!signSuccess)
+            
+            // Look for signed APK (uber-apk-signer creates a new file)
+            var signedApkPath = Path.Combine(tempDir, "unsigned-aligned-signed.apk");
+            if (!File.Exists(signedApkPath))
             {
-                // If signing fails, just use the unsigned APK (for development)
-                File.Copy(unsignedApkPath, outputPath, true);
+                signedApkPath = Path.Combine(tempDir, "unsigned-signed.apk");
             }
-            else
+            if (!File.Exists(signedApkPath))
             {
-                // In real implementation, the signed APK would be renamed to outputPath
-                File.Copy(unsignedApkPath, outputPath, true);
+                // Use unsigned APK if signing failed
+                signedApkPath = unsignedApkPath;
+                Console.WriteLine("Warning: Using unsigned APK (signing may have failed)");
             }
+
+            // Copy to final output location
+            File.Copy(signedApkPath, outputPath, true);
+            Console.WriteLine($"Final APK: {outputPath} ({new FileInfo(outputPath).Length / 1024.0 / 1024.0:F2} MB)");
 
             return File.Exists(outputPath) ? outputPath : null;
         }
-        finally
+        catch (Exception ex)
         {
-            // Clean up temp directory
-            try
+            Console.WriteLine($"ERROR building APK: {ex.Message}");
+            Console.WriteLine(ex.StackTrace);
+            return null;
+        }
+    }
+
+    private async Task ApplyBalatroApkPatchesAsync(string decompiledApkPath)
+    {
+        if (string.IsNullOrEmpty(_balatroApkPatchPath) || !Directory.Exists(_balatroApkPatchPath))
+        {
+            return;
+        }
+
+        try
+        {
+            // Copy all patch files to the decompiled APK
+            foreach (var file in Directory.GetFiles(_balatroApkPatchPath, "*", SearchOption.AllDirectories))
             {
-                Directory.Delete(tempDir, true);
+                var relativePath = Path.GetRelativePath(_balatroApkPatchPath, file);
+                var targetPath = Path.Combine(decompiledApkPath, relativePath);
+                
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+                File.Copy(file, targetPath, true);
             }
-            catch
-            {
-                // Ignore cleanup errors
-            }
+            Console.WriteLine("Applied Balatro APK patches");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to apply Balatro APK patches: {ex.Message}");
         }
     }
 
@@ -275,17 +325,43 @@ public class BuildService : IBuildService
         };
 
         // Inject mods into the APK structure
-        await _modInjectionService.InjectModsAsync(modConfig);
+        var result = await _modInjectionService.InjectModsAsync(modConfig);
+        
+        if (result.Success)
+        {
+            Console.WriteLine($"Injected {result.InjectedComponents.Count()} mod components ({result.BytesCopied / 1024.0 / 1024.0:F2} MB)");
+        }
+        else
+        {
+            Console.WriteLine($"Warning: Mod injection had errors: {string.Join(", ", result.Errors)}");
+        }
     }
 
     private async Task ApplyAndroidManifestPatchesAsync(string decompiledApkPath)
     {
-        // Apply basic AndroidManifest patches (placeholder)
         var manifestPath = Path.Combine(decompiledApkPath, "AndroidManifest.xml");
-        if (File.Exists(manifestPath))
+        if (!File.Exists(manifestPath))
         {
-            // In real implementation, would patch package name, permissions, etc.
-            // For now, just leave as-is
+            Console.WriteLine("Warning: AndroidManifest.xml not found");
+            return;
+        }
+
+        try
+        {
+            var content = await File.ReadAllTextAsync(manifestPath);
+            
+            // Change package name to avoid conflicts with official LÖVE app
+            content = content.Replace("org.love2d.android", "com.unofficial.balatro");
+            
+            // Change app name
+            content = content.Replace("android:label=\"LÖVE for Android\"", "android:label=\"Balatro\"");
+            
+            await File.WriteAllTextAsync(manifestPath, content);
+            Console.WriteLine("Patched AndroidManifest.xml");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to patch AndroidManifest: {ex.Message}");
         }
     }
 
@@ -293,12 +369,12 @@ public class BuildService : IBuildService
     {
         var patches = new List<PatchConfig>();
 
-        // Mobile compatibility patches
+        // Mobile compatibility patches - these are applied to the Lua source code
         patches.Add(new PatchConfig
         {
             FilePath = "globals.lua",
-            SearchPattern = "loadstring",
-            Replacement = @"    -- Removed 'loadstring' line which generated lua code that exited upon starting on mobile
+            SearchPattern = "self:set_language",
+            Replacement = @"-- Mobile compatibility patch
     if love.system.getOS() == 'Android' or love.system.getOS() == 'iOS' then
         self.F_SAVE_TIMER = 5
         self.F_DISCORD = true
@@ -308,7 +384,8 @@ public class BuildService : IBuildService
         self.F_VIDEO_SETTINGS = false
         self.F_ENGLISH_ONLY = false
         self.F_QUIT_BUTTON = false
-    end",
+    end
+    self:set_language",
             Description = "Mobile compatibility patch"
         });
 
@@ -328,35 +405,15 @@ public class BuildService : IBuildService
             });
         }
 
-        // Landscape orientation patch
-        if (config.EnableLandscape)
-        {
-            patches.Add(new PatchConfig
-            {
-                FilePath = "functions/button_callbacks.lua",
-                SearchPattern = "resizable = true,",
-                Replacement = "    resizable = not (love.system.getOS() == 'Android' or love.system.getOS() == 'iOS'),",
-                Description = "Landscape orientation lock"
-            });
-        }
-
         // High DPI patch
         if (config.EnableHighDpi)
         {
             patches.Add(new PatchConfig
             {
                 FilePath = "conf.lua",
-                SearchPattern = "t.window.width = 0",
-                Replacement = "    t.window.width = 0\n    t.window.usedpiscale = false",
+                SearchPattern = "t.window.usedpiscale",
+                Replacement = "    t.window.usedpiscale = false",
                 Description = "High DPI configuration"
-            });
-
-            patches.Add(new PatchConfig
-            {
-                FilePath = "functions/button_callbacks.lua",
-                SearchPattern = "highdpi = (love.system.getOS() == 'OS X')",
-                Replacement = "    highdpi = (love.system.getOS() == 'OS X' or love.system.getOS() == 'Android' or love.system.getOS() == 'iOS')",
-                Description = "High DPI platform support"
             });
         }
 
@@ -378,8 +435,8 @@ public class BuildService : IBuildService
             patches.Add(new PatchConfig
             {
                 FilePath = "conf.lua",
-                SearchPattern = "t.window.width = 0",
-                Replacement = "    t.window.width = 0\n    t.externalstorage = true",
+                SearchPattern = "t.externalstorage",
+                Replacement = "    t.externalstorage = true",
                 Description = "External storage configuration"
             });
         }
@@ -398,5 +455,4 @@ public class BuildService : IBuildService
             Duration = duration
         };
     }
-
 }

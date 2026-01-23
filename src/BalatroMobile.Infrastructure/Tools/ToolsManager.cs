@@ -31,6 +31,9 @@ public class ToolsManager
     // Love2D: Tag is "11.5a" not "11.5"
     private static readonly string LOVE2D_APK_URL = $"https://github.com/love2d/love-android/releases/download/{LOVE2D_VERSION}a/love-{LOVE2D_VERSION}-android-embed.apk";
     
+    // Balatro APK Patch from blake502's balatro-mobile-maker - contains patched APK files
+    private const string BALATRO_APK_PATCH_URL = "https://github.com/blake502/balatro-mobile-maker/releases/download/Additional-Tools-1.0/Balatro-APK-Patch.zip";
+    
     // OpenJDK - using Adoptium (Eclipse Temurin) portable JRE builds
     // Format: OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip
     private static readonly string OPENJDK_URL = RuntimeInformation.OSArchitecture == Architecture.Arm64
@@ -42,6 +45,7 @@ public class ToolsManager
     public string ApkToolPath => Path.Combine(_toolsDirectory, "apktool.jar");
     public string UberApkSignerPath => Path.Combine(_toolsDirectory, "uber-apk-signer.jar");
     public string Love2dApkPath => Path.Combine(_toolsDirectory, "love-android-embed.apk");
+    public string BalatroApkPatchPath => Path.Combine(_toolsDirectory, "Balatro-APK-Patch");
 
     public ToolsManager(Action<string>? progressCallback = null)
     {
@@ -69,7 +73,8 @@ public class ToolsManager
                 EnsureJavaAsync(),
                 EnsureApkToolAsync(),
                 EnsureUberApkSignerAsync(),
-                EnsureLove2dApkAsync()
+                EnsureLove2dApkAsync(),
+                EnsureBalatroApkPatchAsync()
             };
 
             var results = await Task.WhenAll(tasks);
@@ -90,7 +95,8 @@ public class ToolsManager
         return IsJavaAvailable() && 
                File.Exists(ApkToolPath) && 
                File.Exists(UberApkSignerPath) && 
-               File.Exists(Love2dApkPath);
+               File.Exists(Love2dApkPath) &&
+               Directory.Exists(BalatroApkPatchPath);
     }
 
     /// <summary>
@@ -298,6 +304,52 @@ public class ToolsManager
         catch (Exception ex)
         {
             ReportProgress($"Failed to download Love2D APK: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task<bool> EnsureBalatroApkPatchAsync()
+    {
+        if (Directory.Exists(BalatroApkPatchPath) && 
+            Directory.GetFiles(BalatroApkPatchPath, "*", SearchOption.AllDirectories).Length > 0)
+        {
+            ReportProgress("Balatro APK Patch: Available");
+            return true;
+        }
+
+        ReportProgress("Downloading Balatro APK Patch...");
+        
+        var patchZipPath = Path.Combine(_toolsDirectory, "Balatro-APK-Patch.zip");
+        
+        try
+        {
+            await DownloadFileAsync(BALATRO_APK_PATCH_URL, patchZipPath);
+            
+            // Extract the patch
+            ReportProgress("Extracting Balatro APK Patch...");
+            if (Directory.Exists(BalatroApkPatchPath))
+            {
+                Directory.Delete(BalatroApkPatchPath, true);
+            }
+            ZipFile.ExtractToDirectory(patchZipPath, BalatroApkPatchPath);
+            
+            // Cleanup zip
+            File.Delete(patchZipPath);
+            
+            ReportProgress("Balatro APK Patch: Downloaded and ready");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ReportProgress($"Failed to download Balatro APK Patch: {ex.Message}");
+            
+            // Cleanup on failure
+            try
+            {
+                if (File.Exists(patchZipPath)) File.Delete(patchZipPath);
+            }
+            catch { }
+            
             return false;
         }
     }

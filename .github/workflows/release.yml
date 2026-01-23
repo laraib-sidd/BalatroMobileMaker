@@ -1,0 +1,64 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/BalatroMobile.Cli/BalatroMobile.Cli.csproj
+
+      - name: Build
+        run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release --no-restore
+
+      - name: Publish single-file EXE
+        run: |
+          dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --output ./release
+
+      - name: List release files
+        run: dir ./release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/BalatroMobile.exe
+          body: |
+            ## BalatroMobile ${{ github.ref_name }}
+            
+            Download `BalatroMobile.exe` and double-click to run.
+            
+            ### Features
+            - Interactive wizard mode - just double-click and follow prompts
+            - Build modded APKs with Cryptid, Talisman, and other Steamodded mods
+            - Transfer saves between PC and Android
+            - No .NET runtime required (self-contained)
+            
+            ### Requirements
+            - Steam Balatro installed on PC
+            - Java Runtime Environment (JRE) for APK building
+            - (Optional) ADB for save transfer
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

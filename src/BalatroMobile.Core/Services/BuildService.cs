@@ -11,19 +11,22 @@ public class BuildService : IBuildService
     private readonly IModInjectionService _modInjectionService;
     private readonly IApkTool _apkTool;
     private readonly IJavaTool _javaTool;
+    private readonly string? _love2dApkPath;
 
     public BuildService(
         IGameDetector gameDetector,
         IPatchService patchService,
         IModInjectionService modInjectionService,
         IApkTool apkTool,
-        IJavaTool javaTool)
+        IJavaTool javaTool,
+        string? love2dApkPath = null)
     {
         _gameDetector = gameDetector;
         _patchService = patchService;
         _modInjectionService = modInjectionService;
         _apkTool = apkTool;
         _javaTool = javaTool;
+        _love2dApkPath = love2dApkPath;
     }
 
     public async Task<BuildResult> BuildAsync(BuildConfig config, IProgress<string>? progress = null)
@@ -174,9 +177,18 @@ public class BuildService : IBuildService
                 outputPath = "balatro.apk";
             }
 
-            // Step 1: Get base APK path (placeholder - would download if not cached)
-            var baseApkPath = Path.Combine(tempDir, "love-11.5-android-embed.apk");
-            // In real implementation, download love-11.5-android-embed.apk
+            // Step 1: Get base APK path
+            var baseApkPath = _love2dApkPath;
+            if (string.IsNullOrEmpty(baseApkPath) || !File.Exists(baseApkPath))
+            {
+                // Fall back to looking in temp dir (for backwards compatibility)
+                baseApkPath = Path.Combine(tempDir, "love-11.5-android-embed.apk");
+            }
+            
+            if (!File.Exists(baseApkPath))
+            {
+                return null; // Love2D APK not found
+            }
 
             // Step 2: Decompile APK
             var decompiledPath = Path.Combine(tempDir, "decompiled");

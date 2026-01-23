@@ -6,11 +6,13 @@ public class ApkTool : IApkTool
 {
     private readonly IJavaTool _javaTool;
     private readonly string _apkToolJarPath;
+    private readonly string? _uberApkSignerPath;
 
-    public ApkTool(IJavaTool javaTool, string apkToolJarPath)
+    public ApkTool(IJavaTool javaTool, string apkToolJarPath, string? uberApkSignerPath = null)
     {
         _javaTool = javaTool;
         _apkToolJarPath = apkToolJarPath;
+        _uberApkSignerPath = uberApkSignerPath;
     }
 
     public async Task<bool> DecompileAsync(string apkPath, string outputPath)
@@ -37,9 +39,22 @@ public class ApkTool : IApkTool
 
     public async Task<bool> SignAsync(string apkPath)
     {
-        // APK signing would typically use a separate tool like uber-apk-signer
-        // For now, return true as a placeholder
-        return await Task.FromResult(true);
+        if (string.IsNullOrEmpty(_uberApkSignerPath) || !File.Exists(_uberApkSignerPath))
+        {
+            // No signer available - APK will be unsigned (can still be installed with adb)
+            return true;
+        }
+
+        if (!File.Exists(apkPath))
+        {
+            return false;
+        }
+
+        // uber-apk-signer signs in place and creates aligned APK
+        // --apks <path> : the APK to sign
+        // --overwrite : overwrite the original file
+        var arguments = $"-jar \"{_uberApkSignerPath}\" --apks \"{apkPath}\" --overwrite";
+        return await _javaTool.ExecuteAsync(arguments);
     }
 
     public async Task<bool> IsAvailableAsync()

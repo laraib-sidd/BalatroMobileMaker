@@ -30,6 +30,10 @@ internal class Program
             {
                 await RunTransfer(args.Skip(1).ToArray());
             }
+            else if (args[0] == "tools")
+            {
+                await RunToolsCommand(args.Skip(1).ToArray());
+            }
             else if (args[0] == "--help" || args[0] == "-h")
             {
                 ShowUsage();
@@ -134,13 +138,31 @@ internal class Program
             Console.WriteLine($"Output: {config.OutputPath}");
             Console.WriteLine();
 
-            // Create services (in real implementation, this would use dependency injection)
+            // Initialize tools manager (handles auto-downloading of required tools)
+            Console.WriteLine("Checking required tools...");
+            var toolsManager = new ToolsManager(msg => Console.WriteLine($"  {msg}"));
+            
+            if (!toolsManager.AreToolsAvailable())
+            {
+                Console.WriteLine();
+                Console.WriteLine("Some tools need to be downloaded (first run only)...");
+                var toolsReady = await toolsManager.EnsureToolsAvailableAsync();
+                if (!toolsReady)
+                {
+                    Console.WriteLine("ERROR: Failed to download required tools.");
+                    Console.WriteLine("Please check your internet connection and try again.");
+                    return;
+                }
+                Console.WriteLine();
+            }
+
+            // Create services using the tools manager paths
             var gameDetector = new GameDetector();
             var patchService = new PatchService();
             var modInjectionService = new ModInjectionService();
-            var javaTool = new JavaTool();
-            var apkTool = new ApkTool(javaTool, "apktool.jar"); // Placeholder path
-            var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool);
+            var javaTool = new JavaTool(toolsManager.GetJavaExecutablePath());
+            var apkTool = new ApkTool(javaTool, toolsManager.ApkToolPath, toolsManager.UberApkSignerPath);
+            var buildService = new BuildService(gameDetector, patchService, modInjectionService, apkTool, javaTool, toolsManager.Love2dApkPath);
 
             // Validate environment first
             Console.WriteLine("Validating build environment...");
@@ -612,6 +634,75 @@ internal class Program
         Console.ReadKey();
     }
 
+    private static async Task RunToolsCommand(string[] args)
+    {
+        var toolsManager = new ToolsManager(msg => Console.WriteLine($"  {msg}"));
+
+        if (args.Length == 0 || args[0] == "status")
+        {
+            // Show tools status
+            Console.WriteLine("BalatroMobile Tools Status");
+            Console.WriteLine("==========================");
+            Console.WriteLine();
+            Console.WriteLine($"Tools directory: {toolsManager.ToolsDirectory}");
+            Console.WriteLine($"Cache size: {toolsManager.GetCacheSize() / 1024 / 1024:F1} MB");
+            Console.WriteLine();
+
+            Console.WriteLine("Tool availability:");
+            Console.WriteLine($"  Java:            {(toolsManager.IsJavaAvailable() ? "Available" : "Not found")}");
+            Console.WriteLine($"  APKTool:         {(File.Exists(toolsManager.ApkToolPath) ? "Available" : "Not found")}");
+            Console.WriteLine($"  uber-apk-signer: {(File.Exists(toolsManager.UberApkSignerPath) ? "Available" : "Not found")}");
+            Console.WriteLine($"  Love2D APK:      {(File.Exists(toolsManager.Love2dApkPath) ? "Available" : "Not found")}");
+            Console.WriteLine();
+
+            if (!toolsManager.AreToolsAvailable())
+            {
+                Console.WriteLine("Some tools are missing. Run 'BalatroMobile tools download' to download them.");
+            }
+            else
+            {
+                Console.WriteLine("All tools are available.");
+            }
+        }
+        else if (args[0] == "download")
+        {
+            Console.WriteLine("Downloading required tools...");
+            Console.WriteLine();
+            var success = await toolsManager.EnsureToolsAvailableAsync();
+            Console.WriteLine();
+            if (success)
+            {
+                Console.WriteLine("All tools downloaded successfully.");
+            }
+            else
+            {
+                Console.WriteLine("ERROR: Some tools failed to download. Check your internet connection.");
+            }
+        }
+        else if (args[0] == "clear")
+        {
+            Console.Write("This will delete all cached tools. Are you sure? (y/N): ");
+            var response = Console.ReadLine()?.Trim().ToLower();
+            if (response == "y" || response == "yes")
+            {
+                toolsManager.ClearCache();
+                Console.WriteLine("Tool cache cleared.");
+            }
+            else
+            {
+                Console.WriteLine("Cancelled.");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Unknown tools command.");
+            Console.WriteLine("Available commands:");
+            Console.WriteLine("  tools status   - Show tools status (default)");
+            Console.WriteLine("  tools download - Download all required tools");
+            Console.WriteLine("  tools clear    - Clear cached tools");
+        }
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("BalatroMobile - Build Balatro for Mobile Devices");
@@ -621,6 +712,7 @@ internal class Program
         Console.WriteLine("  BalatroMobile check                  - Run pre-flight checks");
         Console.WriteLine("  BalatroMobile build [options]        - Build for mobile");
         Console.WriteLine("  BalatroMobile transfer [options]     - Transfer saves between PC and Android");
+        Console.WriteLine("  BalatroMobile tools [status|download|clear] - Manage build tools");
         Console.WriteLine();
         Console.WriteLine("Build Options:");
         Console.WriteLine("  --fps <default|none|60>             - FPS cap (default: default)");

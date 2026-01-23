@@ -142,18 +142,18 @@ public class BuildService : IBuildService
 
             // Step 6: Build APK
             progress?.Report("Building Android APK...");
-            var outputPath = await BuildAndroidApkAsync(config, gameLovePath, tempDir);
-            if (string.IsNullOrEmpty(outputPath))
+            var finalApkPath = await BuildAndroidApkAsync(config, gameLovePath, tempDir);
+            if (string.IsNullOrEmpty(finalApkPath))
             {
                 errors.Add("Failed to build Android APK");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
             
-            var apkInfo = new FileInfo(outputPath);
+            var apkInfo = new FileInfo(finalApkPath);
             messages.Add($"Built APK: {apkInfo.Length / 1024.0 / 1024.0:F2} MB");
 
             progress?.Report("Build completed successfully!");
-            return CreateResult(true, outputPath, messages, errors, DateTime.Now - startTime);
+            return CreateResult(true, finalApkPath, messages, errors, DateTime.Now - startTime);
         }
         catch (Exception ex)
         {

@@ -13,6 +13,7 @@ BalatroMobile is a modern, re-architected tool for building Balatro (the popular
 - 🔧 **Full Mod Support** - Automatic Lovely + Steamodded injection
 - 📱 **Android Support** - Build modded APKs for Android devices
 - 📦 **Single EXE** - Self-contained, no .NET runtime required
+- ⬇️ **Auto-Download Tools** - Java, APKTool, and other dependencies downloaded automatically
 
 ## 🏗️ Architecture
 
@@ -54,12 +55,14 @@ That's it! The tool will:
 
 ### Prerequisites
 
-Before using BalatroMobile, ensure your system meets all requirements:
+Before using BalatroMobile, ensure:
 
-1. **Steam Balatro** installed and working
-2. **Mods properly set up** (Lovely, Steamodded, Cryptid, etc.)
-3. **Java/OpenJDK** installed for APK building
-4. **(Optional)** Android device with USB debugging for save transfer
+1. **Steam Balatro** installed and working on your PC
+2. **Mods properly set up** (Lovely, Steamodded, Cryptid, etc.) and working
+3. **Run the game once** with mods to generate the Lovely dump
+4. **(Optional)** Android device with USB debugging for save transfer - NOT required for building APKs
+
+**Note:** Java, APKTool, and other build tools are **automatically downloaded** on first run. No manual installation needed!
 
 ### Pre-Flight Check
 
@@ -105,6 +108,23 @@ BalatroMobile transfer --from pc --to android
 # Transfer saves from Android to PC
 BalatroMobile transfer --from android --to pc
 ```
+
+### Managing Tools
+
+BalatroMobile automatically downloads required tools (Java, APKTool, etc.) on first run. You can manage these tools manually:
+
+```bash
+# Check tools status
+BalatroMobile tools status
+
+# Force re-download all tools
+BalatroMobile tools download
+
+# Clear tool cache (forces re-download on next build)
+BalatroMobile tools clear
+```
+
+Tools are cached in `%LOCALAPPDATA%\BalatroMobile\tools\` and only need to be downloaded once.
 
 ## 📋 Pre-Flight Checklist Details
 

@@ -111,8 +111,8 @@ public class PreFlightCheckService : IPreFlightCheckService
                 Name = "JavaRuntimeAvailable",
                 Description = "Java runtime is available for APK building",
                 CheckFunction = CheckJavaRuntime,
-                IsRequired = true,
-                FixSuggestion = "Install OpenJDK or ensure Java is in PATH"
+                IsRequired = false, // Will be auto-downloaded if missing
+                FixSuggestion = "Java will be auto-downloaded on first build, or install OpenJDK manually"
             },
 
             new PreFlightCheck

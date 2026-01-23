@@ -352,16 +352,44 @@ public class BuildService : IBuildService
             var signSuccess = await _apkTool.SignAsync(unsignedApkPath);
             
             // Look for signed APK (uber-apk-signer creates a new file)
-            var signedApkPath = Path.Combine(tempDir, "unsigned-aligned-signed.apk");
+            // uber-apk-signer naming: {input}-aligned-debugSigned.apk
+            // Input: unsigned.apk -> Output: unsigned-aligned-debugSigned.apk
+            var signedApkPath = Path.Combine(tempDir, "unsigned-aligned-debugSigned.apk");
+            
+            // #region agent log
+            // Log what files exist in temp dir after signing
+            var tempFiles = Directory.GetFiles(tempDir, "*.apk");
+            DebugLog("F", "After signing - APK files in temp dir", new { tempDir, apkFiles = tempFiles.Select(Path.GetFileName).ToArray() });
+            DebugLog("F", "Looking for signed APK", new { expectedPath = signedApkPath, exists = File.Exists(signedApkPath) });
+            // #endregion
+            
             if (!File.Exists(signedApkPath))
             {
-                signedApkPath = Path.Combine(tempDir, "unsigned-signed.apk");
+                // Try alternative naming patterns
+                signedApkPath = Path.Combine(tempDir, "unsigned-debugSigned.apk");
+                // #region agent log
+                DebugLog("F", "Trying alternative 1", new { path = signedApkPath, exists = File.Exists(signedApkPath) });
+                // #endregion
             }
             if (!File.Exists(signedApkPath))
             {
-                // Use unsigned APK if signing failed
+                signedApkPath = Path.Combine(tempDir, "unsigned-aligned-signed.apk");
+                // #region agent log
+                DebugLog("F", "Trying alternative 2", new { path = signedApkPath, exists = File.Exists(signedApkPath) });
+                // #endregion
+            }
+            if (!File.Exists(signedApkPath))
+            {
+                // Use unsigned APK if signing failed - THIS WILL NOT INSTALL ON ANDROID!
                 signedApkPath = unsignedApkPath;
-                Console.WriteLine("Warning: Using unsigned APK (signing may have failed)");
+                Console.WriteLine("ERROR: Signed APK not found! Using unsigned APK (will NOT install on Android)");
+                // #region agent log
+                DebugLog("F", "SIGNING FAILED - using unsigned APK", new { unsignedApkPath });
+                // #endregion
+            }
+            else
+            {
+                Console.WriteLine($"Using signed APK: {Path.GetFileName(signedApkPath)}");
             }
 
             // Copy to final output location

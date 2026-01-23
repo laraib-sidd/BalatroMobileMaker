@@ -586,33 +586,7 @@ internal class Program
         Console.WriteLine("=====================================");
         Console.WriteLine();
 
-        // Initial setup questions (like original)
-        bool cleanupAfter = AskYesNo("Would you like to automatically clean up once complete?", false);
-        bool verboseMode = AskYesNo("Would you like to enable extra logging information?", false);
-
-        // Check for existing builds
-        string existingApk = "balatro.apk";
-        bool hasExistingBuild = File.Exists(existingApk);
-
-        if (hasExistingBuild)
-        {
-            Console.WriteLine($"Found existing build: {existingApk}");
-            bool rebuild = AskYesNo("Would you like to build again?", true);
-            if (!rebuild)
-            {
-                Console.WriteLine("Build cancelled.");
-                WaitForKeyPress();
-                return;
-            }
-        }
-
-        // Platform info
-        Console.WriteLine("NOTE: ADB is NOT required for building modded APKs - only for save transfer.");
-        Console.WriteLine("Building for Android...");
-        Console.WriteLine();
-
-        // Check if Balatro is installed - if not, prompt for path
-        Console.WriteLine();
+        // Check if Balatro is installed first
         var gameDetector = new GameDetector();
         var balatroPath = await gameDetector.GetGameInstallPathAsync();
         
@@ -632,33 +606,105 @@ internal class Program
                 return;
             }
             
-            // Set the override path for the game detector
             GameDetector.OverrideGamePath = userPath;
-            Console.WriteLine($"Using Balatro path: {userPath}");
+            balatroPath = userPath;
+        }
+        
+        Console.WriteLine($"Found Balatro at: {balatroPath}");
+        Console.WriteLine();
+
+        // Show default configuration and ask if user wants quick build or customize
+        Console.WriteLine("=== DEFAULT BUILD SETTINGS ===");
+        Console.WriteLine();
+        Console.WriteLine("  Platform:        Android");
+        Console.WriteLine("  FPS Cap:         60 FPS");
+        Console.WriteLine("  Landscape Lock:  Yes");
+        Console.WriteLine("  High DPI:        Yes");
+        Console.WriteLine("  CRT Shader:      Enabled (disable for Pixel devices)");
+        Console.WriteLine("  Include Mods:    Yes");
+        Console.WriteLine("  Output:          balatro.apk");
+        Console.WriteLine();
+        Console.WriteLine("==============================");
+        Console.WriteLine();
+
+        // Ask for quick build or customization
+        Console.WriteLine("Options:");
+        Console.WriteLine("  [1] Quick Build - Use defaults above and start immediately");
+        Console.WriteLine("  [2] Customize   - Configure each option manually");
+        Console.WriteLine("  [3] Exit        - Cancel and exit");
+        Console.WriteLine();
+        
+        int choice = AskChoice("Select option", 1, 3);
+        
+        if (choice == 3)
+        {
+            Console.WriteLine("Build cancelled.");
+            WaitForKeyPress();
+            return;
+        }
+
+        // Default values
+        bool cleanupAfter = true;
+        bool verboseMode = false;
+        bool applyFpsPatch = true;
+        int fpsChoice = 2; // 60 FPS
+        bool applyLandscapePatch = true;
+        bool applyHighDpiPatch = true;
+        bool applyCrtPatch = false;
+        bool injectMods = true;
+        string outputFile = "balatro.apk";
+
+        if (choice == 2)
+        {
+            // Customization mode - ask all questions
+            Console.WriteLine();
+            Console.WriteLine("=== CUSTOMIZATION MODE ===");
+            Console.WriteLine();
+
+            cleanupAfter = AskYesNo("Automatically clean up temp files?", true);
+            verboseMode = AskYesNo("Enable extra logging?", false);
+
+            // FPS patch
+            applyFpsPatch = AskYesNo("Apply FPS cap patch?", true);
+            if (applyFpsPatch)
+            {
+                Console.WriteLine();
+                Console.WriteLine("FPS options:");
+                Console.WriteLine("  1. Device default (matches screen refresh rate)");
+                Console.WriteLine("  2. 60 FPS (recommended)");
+                Console.WriteLine("  3. No limit");
+                fpsChoice = AskChoice("Choose FPS setting", 1, 3);
+            }
+
+            applyLandscapePatch = AskYesNo("Apply landscape orientation lock?", true);
+            applyHighDpiPatch = AskYesNo("Apply high DPI patch? (recommended for high-res screens)", true);
+            applyCrtPatch = AskYesNo("Disable CRT shader? (Required for Pixel and some devices!)", false);
+            injectMods = AskYesNo("Include mods (Cryptid, Talisman, etc.)?", true);
+
+            Console.WriteLine();
+            Console.Write("Output filename (Enter for 'balatro.apk'): ");
+            var userOutput = Console.ReadLine()?.Trim();
+            if (!string.IsNullOrEmpty(userOutput))
+            {
+                var validatedPath = ValidateOutputPath(userOutput);
+                if (validatedPath != null)
+                {
+                    outputFile = validatedPath;
+                }
+            }
         }
         else
         {
-            Console.WriteLine($"Found Balatro at: {balatroPath}");
+            // Quick build mode
+            Console.WriteLine();
+            Console.WriteLine("Starting quick build with default settings...");
         }
 
-        // Run pre-flight checks
-        Console.WriteLine();
-        await RunPreFlightChecks();
-        Console.WriteLine();
-
-        // Configure build options interactively (like original patching questions)
+        // Build the args
         var buildArgs = new List<string>();
 
-        // FPS patch question (like original)
-        bool applyFpsPatch = AskYesNo("Would you like to apply the FPS cap patch?", true);
         if (applyFpsPatch)
         {
-            Console.WriteLine();
-            Console.WriteLine("FPS options:");
-            Console.WriteLine("1. Default (recommended)");
-            Console.WriteLine("2. 60 FPS");
-            Console.WriteLine("3. No limit");
-            int fpsChoice = AskChoice("Choose FPS setting", 1, 3);
             if (fpsChoice == 2)
             {
                 buildArgs.Add("--fps");
@@ -671,61 +717,43 @@ internal class Program
             }
         }
 
-        // Landscape orientation patch (like original)
-        bool applyLandscapePatch = AskYesNo("Would you like to apply the landscape orientation patch?", true);
         if (applyLandscapePatch)
         {
             buildArgs.Add("--no-landscape");
         }
 
-        // High DPI patch (like original)
-        bool applyHighDpiPatch = AskYesNo("Would you like to apply the high DPI patch (recommended for devices with high resolution)?", true);
         if (applyHighDpiPatch)
         {
             buildArgs.Add("--high-dpi");
         }
 
-        // CRT shader disable patch (like original)
-        bool applyCrtPatch = AskYesNo("Would you like to apply the CRT shader disable patch? (Required for Pixel and some other devices!)", false);
         if (applyCrtPatch)
         {
             buildArgs.Add("--disable-crt");
         }
 
-        // Mod injection (our addition)
-        bool injectMods = AskYesNo("Include mods (Cryptid, Talisman, etc.)?", true);
         if (injectMods)
         {
             buildArgs.Add("--inject-mods");
         }
 
-        // Output file
-        Console.WriteLine();
-        Console.Write("Output filename (press Enter for default 'balatro.apk'): ");
-        string outputFile = Console.ReadLine()?.Trim() ?? "";
-        if (!string.IsNullOrEmpty(outputFile))
+        if (outputFile != "balatro.apk")
         {
-            // Validate the output path
-            var validatedPath = ValidateOutputPath(outputFile);
-            if (validatedPath == null)
+            buildArgs.Add("--output");
+            buildArgs.Add(outputFile);
+        }
+
+        // Check for existing output file
+        if (File.Exists(outputFile))
+        {
+            if (choice == 1)
             {
-                Console.WriteLine("Using default output path instead.");
-                outputFile = "";
+                // Quick mode - just warn and continue
+                Console.WriteLine($"Note: Existing '{outputFile}' will be overwritten.");
             }
             else
             {
-                outputFile = validatedPath;
-                buildArgs.Add("--output");
-                buildArgs.Add(outputFile);
-            }
-        }
-        
-        // Also validate default path if user didn't specify custom
-        if (string.IsNullOrEmpty(outputFile))
-        {
-            if (File.Exists("balatro.apk"))
-            {
-                bool overwrite = AskYesNo("Default output 'balatro.apk' already exists. Overwrite?", true);
+                bool overwrite = AskYesNo($"'{outputFile}' already exists. Overwrite?", true);
                 if (!overwrite)
                 {
                     Console.WriteLine("Build cancelled - please specify a different output filename.");
@@ -735,46 +763,46 @@ internal class Program
             }
         }
 
-        // Show configuration summary
-        Console.WriteLine();
-        Console.WriteLine("Build configuration:");
-        Console.WriteLine("Platform: Android");
-        Console.WriteLine($"FPS Patch: {(applyFpsPatch ? "Yes" : "No")}");
-        Console.WriteLine($"Landscape Patch: {(applyLandscapePatch ? "Yes" : "No")}");
-        Console.WriteLine($"High DPI Patch: {(applyHighDpiPatch ? "Yes" : "No")}");
-        Console.WriteLine($"CRT Shader Patch: {(applyCrtPatch ? "Yes" : "No")}");
-        Console.WriteLine($"Mods: {(injectMods ? "Yes" : "No")}");
-        Console.WriteLine($"Cleanup: {(cleanupAfter ? "Yes" : "No")}");
-        Console.WriteLine($"Verbose: {(verboseMode ? "Yes" : "No")}");
-
-        bool confirm = AskYesNo("Start build with these settings?", true);
-        if (!confirm)
+        // Show configuration summary (for custom mode) or just start (for quick mode)
+        if (choice == 2)
         {
-            Console.WriteLine("Build cancelled.");
-            WaitForKeyPress();
-            return;
+            Console.WriteLine();
+            Console.WriteLine("=== FINAL BUILD CONFIGURATION ===");
+            Console.WriteLine($"  Platform:        Android");
+            Console.WriteLine($"  FPS Cap:         {(applyFpsPatch ? (fpsChoice == 1 ? "Device Default" : fpsChoice == 2 ? "60 FPS" : "No Limit") : "No")}");
+            Console.WriteLine($"  Landscape Lock:  {(applyLandscapePatch ? "Yes" : "No")}");
+            Console.WriteLine($"  High DPI:        {(applyHighDpiPatch ? "Yes" : "No")}");
+            Console.WriteLine($"  CRT Shader:      {(applyCrtPatch ? "Disabled" : "Enabled")}");
+            Console.WriteLine($"  Include Mods:    {(injectMods ? "Yes" : "No")}");
+            Console.WriteLine($"  Output:          {outputFile}");
+            Console.WriteLine("=================================");
+            Console.WriteLine();
+
+            bool confirm = AskYesNo("Start build with these settings?", true);
+            if (!confirm)
+            {
+                Console.WriteLine("Build cancelled.");
+                WaitForKeyPress();
+                return;
+            }
         }
 
         // Run the build
         Console.WriteLine();
+        Console.WriteLine("Starting build process...");
+        Console.WriteLine();
         await RunBuild(buildArgs.ToArray());
 
-        // Post-build options (like original)
-        if (File.Exists("balatro.apk"))
+        // Post-build options
+        if (File.Exists(outputFile))
         {
             Console.WriteLine();
-            bool autoInstall = AskYesNo("Would you like to automatically install balatro.apk on your Android device?", false);
-            if (autoInstall)
-            {
-                Console.WriteLine("Auto-install not yet implemented in this version.");
-                // TODO: Implement auto-install
-            }
-
-            // Save transfer options (like original)
-            bool transferSaves = AskYesNo("Would you like to transfer saves from your Steam copy of Balatro to your Android device?", false);
+            Console.WriteLine("Build completed successfully!");
+            Console.WriteLine();
+            
+            bool transferSaves = AskYesNo("Transfer saves from PC to Android device?", false);
             if (transferSaves)
             {
-                Console.WriteLine("Thanks for using BalatroMobile!");
                 await RunTransfer(new[] { "--from", "pc", "--to", "android" });
             }
             else

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace BalatroMobile.Infrastructure.Tools;
 
@@ -76,47 +75,48 @@ public class JavaTool : IJavaTool
 
             await process.WaitForExitAsync();
 
-            return process.ExitCode == 0 ? output : error;
+            // IMPORTANT: Java outputs version info to stderr, not stdout!
+            // Always combine both streams to capture all output
+            var combined = output + error;
+            
+            // If exit code is non-zero, prefix with error indicator
+            if (process.ExitCode != 0 && !combined.Contains("Error"))
+            {
+                return $"[ExitCode:{process.ExitCode}] {combined}";
+            }
+            
+            return combined;
         }
         catch (Exception ex)
         {
-            return ex.Message;
+            return $"[Exception] {ex.Message}";
         }
     }
 
     public async Task<bool> IsAvailableAsync()
     {
-        // #region agent log
-        var debugLogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BalatroMobile", "debug.log");
-        Directory.CreateDirectory(Path.GetDirectoryName(debugLogPath)!);
-        void Log(string hyp, string msg, object? data = null) { try { File.AppendAllText(debugLogPath, System.Text.Json.JsonSerializer.Serialize(new { hypothesisId = hyp, location = "JavaTool.cs:IsAvailableAsync", message = msg, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { } }
-        // #endregion
-
         try
         {
-            // #region agent log
-            Log("A", "Java executable path", new { javaPath = _javaExecutablePath, exists = File.Exists(_javaExecutablePath) });
-            // #endregion
+            // Check if the executable file exists (for bundled Java)
+            if (!string.IsNullOrEmpty(_javaExecutablePath) && 
+                _javaExecutablePath != "java" && 
+                !File.Exists(_javaExecutablePath))
+            {
+                return false;
+            }
 
             var result = await ExecuteAndCaptureOutputAsync("-version");
 
-            // #region agent log
-            Log("B", "Java -version result", new { resultLength = result?.Length ?? 0, resultPreview = result?.Substring(0, Math.Min(200, result?.Length ?? 0)), containsNotFound = result?.Contains("not found") ?? false });
-            // #endregion
-
-            var isAvailable = !string.IsNullOrEmpty(result) && !result.Contains("not found");
-
-            // #region agent log
-            Log("D", "Java availability decision", new { isAvailable, resultEmpty = string.IsNullOrEmpty(result) });
-            // #endregion
-
-            return isAvailable;
+            // Java is available if we got output containing version info
+            // and no error indicators
+            return !string.IsNullOrEmpty(result) && 
+                   !result.Contains("[Exception]") &&
+                   !result.Contains("not found") &&
+                   !result.Contains("not recognized") &&
+                   (result.Contains("version") || result.Contains("openjdk") || result.Contains("java"));
         }
-        catch (Exception ex)
+        catch
         {
-            // #region agent log
-            Log("B", "Java check exception", new { exceptionType = ex.GetType().Name, exceptionMessage = ex.Message });
-            // #endregion
             return false;
         }
     }

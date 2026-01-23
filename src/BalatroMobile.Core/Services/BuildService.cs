@@ -1,4 +1,3 @@
-using System.Text.Json;
 using BalatroMobile.Core.Models;
 using BalatroMobile.Core.Services.GameDetection;
 using BalatroMobile.Infrastructure.Tools;
@@ -127,41 +126,11 @@ public class BuildService : IBuildService
 
     public async Task<bool> ValidateBuildEnvironmentAsync()
     {
-        // #region agent log
-        var debugLogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BalatroMobile", "debug.log");
-        Directory.CreateDirectory(Path.GetDirectoryName(debugLogPath)!);
-        void Log(string hyp, string msg, object? data = null) { try { File.AppendAllText(debugLogPath, System.Text.Json.JsonSerializer.Serialize(new { hypothesisId = hyp, location = "BuildService.cs:ValidateBuildEnvironmentAsync", message = msg, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { } }
-        // #endregion
-
         // Check if all required tools are available
-        // #region agent log
-        Log("C", "Checking ApkTool availability...");
-        // #endregion
         var apkToolAvailable = await _apkTool.IsAvailableAsync();
-        // #region agent log
-        Log("C", "ApkTool check result", new { apkToolAvailable });
-        // #endregion
-
-        // #region agent log
-        Log("D", "Checking Java availability...");
-        // #endregion
         var javaAvailable = await _javaTool.IsAvailableAsync();
-        // #region agent log
-        Log("D", "Java check result", new { javaAvailable });
-        // #endregion
-
-        // #region agent log
-        Log("E", "Checking Balatro availability...");
-        // #endregion
         var balatroPath = await _gameDetector.GetGameInstallPathAsync();
         var balatroAvailable = balatroPath != null;
-        // #region agent log
-        Log("E", "Balatro check result", new { balatroAvailable, balatroPath });
-        // #endregion
-
-        // #region agent log
-        Log("ALL", "Final validation result", new { apkToolAvailable, javaAvailable, balatroAvailable, finalResult = apkToolAvailable && javaAvailable && balatroAvailable });
-        // #endregion
 
         return apkToolAvailable && javaAvailable && balatroAvailable;
     }

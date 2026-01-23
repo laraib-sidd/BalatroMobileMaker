@@ -97,21 +97,8 @@ public class BuildService : IBuildService
             }
             messages.Add($"Mobile package built: {outputPath}");
 
-            // Step 6: Inject mods (optional)
-            if (config.InjectMods)
-            {
-                progress?.Report("Injecting mods...");
-                var modInjectionResult = await InjectModsAsync(config);
-                if (modInjectionResult.Success)
-                {
-                    messages.Add($"Mods injected: {string.Join(", ", modInjectionResult.InjectedComponents)}");
-                    messages.Add($"Mod files: {modInjectionResult.FilesCopied} ({modInjectionResult.BytesCopied} bytes)");
-                }
-                else
-                {
-                    errors.Add($"Mod injection failed: {string.Join(", ", modInjectionResult.Errors)}");
-                }
-            }
+            // Note: Mod injection happens inside BuildAndroidApkAsync via InjectModsIntoApkAsync
+            // when config.InjectMods is true - mods are bundled directly into the APK
 
             // Cleanup
             try

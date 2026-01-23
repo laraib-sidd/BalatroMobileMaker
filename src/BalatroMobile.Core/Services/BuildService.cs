@@ -6,6 +6,18 @@ namespace BalatroMobile.Core.Services;
 
 public class BuildService : IBuildService
 {
+    // #region agent log
+    private static readonly string _debugLogPath = Path.Combine(Environment.CurrentDirectory, "debug.log");
+    private static void DebugLog(string hypothesisId, string message, object? data = null)
+    {
+        try
+        {
+            var entry = System.Text.Json.JsonSerializer.Serialize(new { hypothesisId, location = "BuildService.cs", message, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session" });
+            File.AppendAllText(_debugLogPath, entry + "\n");
+        }
+        catch { }
+    }
+    // #endregion
     private readonly IGameDetector _gameDetector;
     private readonly IPatchService _patchService;
     private readonly IModInjectionService _modInjectionService;
@@ -119,6 +131,42 @@ public class BuildService : IBuildService
             Console.WriteLine($"  Files extracted:    {extractedLuaFiles.Length} Lua files");
             messages.Add($"Extracted {extractedLuaFiles.Length} Lua files");
             
+            // #region agent log
+            // Log critical file existence and content check
+            var globalsPath = Path.Combine(extractPath, "globals.lua");
+            var mainPath = Path.Combine(extractPath, "main.lua");
+            var confPath = Path.Combine(extractPath, "conf.lua");
+            var buttonCallbacksPath = Path.Combine(extractPath, "functions", "button_callbacks.lua");
+            var flameShaderPath = Path.Combine(extractPath, "resources", "shaders", "flame.fs");
+            
+            DebugLog("D", "BuildService extraction verification", new { 
+                luaFilesCount = extractedLuaFiles.Length,
+                globalsExists = File.Exists(globalsPath),
+                mainExists = File.Exists(mainPath),
+                confExists = File.Exists(confPath),
+                buttonCallbacksExists = File.Exists(buttonCallbacksPath),
+                flameShaderExists = File.Exists(flameShaderPath)
+            });
+            
+            // Check if globals.lua contains 'loadstring' (our critical patch target)
+            if (File.Exists(globalsPath))
+            {
+                var globalsContent = File.ReadAllText(globalsPath);
+                var containsLoadstring = globalsContent.Contains("loadstring");
+                var loadstringLineNum = -1;
+                var lines = globalsContent.Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Contains("loadstring"))
+                    {
+                        loadstringLineNum = i + 1;
+                        break;
+                    }
+                }
+                DebugLog("E", "globals.lua loadstring check BEFORE patching", new { containsLoadstring, loadstringLineNum, globalsLength = globalsContent.Length });
+            }
+            // #endregion
+            
             if (extractedLuaFiles.Length == 0)
             {
                 errors.Add("No Lua files found after extraction - extraction may have failed");
@@ -142,6 +190,21 @@ public class BuildService : IBuildService
                     messages.Add($"Note: Patch '{patchResult.Description}' skipped: {patchResult.Error}");
                 }
             }
+            
+            // #region agent log
+            // Verify critical patch was applied - globals.lua should NOT have loadstring anymore
+            var globalsPathPost = Path.Combine(extractPath, "globals.lua");
+            if (File.Exists(globalsPathPost))
+            {
+                var globalsContentPost = File.ReadAllText(globalsPathPost);
+                var stillContainsLoadstring = globalsContentPost.Contains("loadstring");
+                var containsMobileBlock = globalsContentPost.Contains("love.system.getOS() == 'Android'");
+                DebugLog("E", "globals.lua AFTER patching", new { stillContainsLoadstring, containsMobileBlock, globalsLengthPost = globalsContentPost.Length });
+                
+                // Also log first 500 chars of file to see structure
+                DebugLog("E", "globals.lua content sample", new { first500 = globalsContentPost.Substring(0, Math.Min(500, globalsContentPost.Length)) });
+            }
+            // #endregion
 
             // Step 5: Create game.love from patched content
             progress?.Report("Creating game.love package...");
@@ -317,26 +380,57 @@ public class BuildService : IBuildService
 
     private async Task ApplyBalatroApkPatchesAsync(string decompiledApkPath)
     {
+        // #region agent log
+        DebugLog("C", "ApplyBalatroApkPatchesAsync START", new { _balatroApkPatchPath, decompiledApkPath, patchExists = Directory.Exists(_balatroApkPatchPath ?? "") });
+        // #endregion
+
         if (string.IsNullOrEmpty(_balatroApkPatchPath) || !Directory.Exists(_balatroApkPatchPath))
         {
+            // #region agent log
+            DebugLog("C", "ApplyBalatroApkPatchesAsync SKIPPED - no patch path");
+            // #endregion
             return;
         }
 
         try
         {
-            // Copy all patch files to the decompiled APK
-            foreach (var file in Directory.GetFiles(_balatroApkPatchPath, "*", SearchOption.AllDirectories))
+            // Copy ONLY the specific files the original tool copies
+            // Original tool: Patching.cs lines 170-175
+            var filesToCopy = new[]
             {
-                var relativePath = Path.GetRelativePath(_balatroApkPatchPath, file);
-                var targetPath = Path.Combine(decompiledApkPath, relativePath);
+                "AndroidManifest.xml",
+                "res/drawable-hdpi/love.png",
+                "res/drawable-mdpi/love.png",
+                "res/drawable-xhdpi/love.png",
+                "res/drawable-xxhdpi/love.png",
+                "res/drawable-xxxhdpi/love.png"
+            };
+
+            var filesCopied = new List<string>();
+            foreach (var relPath in filesToCopy)
+            {
+                var sourcePath = Path.Combine(_balatroApkPatchPath, relPath);
+                var targetPath = Path.Combine(decompiledApkPath, relPath);
                 
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                File.Copy(file, targetPath, true);
+                if (File.Exists(sourcePath))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+                    File.Copy(sourcePath, targetPath, true);
+                    filesCopied.Add(relPath);
+                }
             }
-            Console.WriteLine("Applied Balatro APK patches");
+            
+            // #region agent log
+            DebugLog("C", "ApplyBalatroApkPatchesAsync DONE", new { filesCopied });
+            // #endregion
+            
+            Console.WriteLine($"Applied Balatro APK patches: {string.Join(", ", filesCopied)}");
         }
         catch (Exception ex)
         {
+            // #region agent log
+            DebugLog("C", "ApplyBalatroApkPatchesAsync ERROR", new { error = ex.Message });
+            // #endregion
             Console.WriteLine($"Warning: Failed to apply Balatro APK patches: {ex.Message}");
         }
     }

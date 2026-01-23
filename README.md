@@ -2,7 +2,7 @@
 
 **Build Balatro for Mobile Devices with Full Mod Support**
 
-BalatroMobile is a modern, re-architected tool for building Balatro (the popular roguelike deck-building game) for Android and iOS devices, with comprehensive mod support including Cryptid, Talisman, and other popular mods.
+BalatroMobile is a modern, re-architected tool for building Balatro (the popular roguelike deck-building game) for Android devices, with comprehensive mod support including Cryptid, Talisman, and other popular mods.
 
 ## ✨ Features
 
@@ -11,7 +11,7 @@ BalatroMobile is a modern, re-architected tool for building Balatro (the popular
 - 🔍 **Smart Path Detection** - Auto-finds Balatro in any Steam library, or prompts you
 - 🛡️ **Pre-flight Checks** - Comprehensive system validation before building
 - 🔧 **Full Mod Support** - Automatic Lovely + Steamodded injection
-- 📱 **Cross-Platform** - Android and iOS support
+- 📱 **Android Support** - Build modded APKs for Android devices
 - 📦 **Single EXE** - Self-contained, no .NET runtime required
 
 ## 🏗️ Architecture
@@ -87,14 +87,11 @@ The pre-flight check will validate:
 Once all checks pass:
 
 ```bash
-# Build for Android (recommended)
-BalatroMobile build --platform android
-
-# Build for iOS (experimental)
-BalatroMobile build --platform ios
+# Build for Android
+BalatroMobile build
 
 # Build with custom options
-BalatroMobile build --platform android --fps-cap 60 --landscape
+BalatroMobile build --fps 60 --high-dpi --inject-mods
 ```
 
 ### Save Transfer

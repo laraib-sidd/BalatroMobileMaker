@@ -31,15 +31,6 @@ public class PreFlightCheckService : IPreFlightCheckService
                 FixSuggestion = "Install Balatro from Steam (https://store.steampowered.com/app/2379780/Balatro/)"
             },
 
-            new PreFlightCheck
-            {
-                Name = "GameWorkingOnPC",
-                Description = "Balatro launches and works correctly on PC",
-                CheckFunction = CheckGameWorksOnPC,
-                IsRequired = true,
-                FixSuggestion = "Launch Balatro from Steam and ensure it reaches the main menu without crashes"
-            },
-
             // Mod Setup Checks
             new PreFlightCheck
             {
@@ -225,12 +216,6 @@ public class PreFlightCheckService : IPreFlightCheckService
     {
         var installed = await _gameDetector.IsSteamBalatroInstalledAsync();
         return installed ? CheckResult.Pass : CheckResult.Fail;
-    }
-
-    private async Task<CheckResult> CheckGameWorksOnPC()
-    {
-        var working = await _gameDetector.IsGameWorkingAsync();
-        return working ? CheckResult.Pass : CheckResult.Fail;
     }
 
     private async Task<CheckResult> CheckModsFolderStructure()

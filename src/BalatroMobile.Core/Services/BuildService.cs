@@ -133,7 +133,7 @@ public class BuildService : IBuildService
 
     public IEnumerable<string> GetSupportedPlatforms()
     {
-        return new[] { "Android", "iOS" };
+        return new[] { "Android" };
     }
 
     private async Task ExtractBalatroAsync(string balatroPath, string extractPath)
@@ -157,15 +157,8 @@ public class BuildService : IBuildService
 
     private async Task<string?> BuildMobilePackageAsync(BuildConfig config, string gamePackagePath)
     {
-        if (config.Platform == Platform.Android)
-        {
-            return await BuildAndroidApkAsync(config, gamePackagePath);
-        }
-        else
-        {
-            // iOS build not implemented yet
-            return null;
-        }
+        // Android is the only supported platform
+        return await BuildAndroidApkAsync(config, gamePackagePath);
     }
 
     private async Task<string?> BuildAndroidApkAsync(BuildConfig config, string gamePackagePath)

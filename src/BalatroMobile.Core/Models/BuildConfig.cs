@@ -8,6 +8,7 @@ public record BuildConfig
     public bool EnableHighDpi { get; init; } = false;
     public bool DisableCrtShader { get; init; } = false;
     public bool EnableExternalStorage { get; init; } = false;
+    public bool InjectMods { get; init; } = false; // Whether to inject mods during build
     public string? CustomFpsValue { get; init; }
     public string OutputPath { get; init; } = "balatro.apk";
 }

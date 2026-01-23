@@ -8,17 +8,20 @@ public class BuildService : IBuildService
 {
     private readonly IGameDetector _gameDetector;
     private readonly IPatchService _patchService;
+    private readonly IModInjectionService _modInjectionService;
     private readonly IApkTool _apkTool;
     private readonly IJavaTool _javaTool;
 
     public BuildService(
         IGameDetector gameDetector,
         IPatchService patchService,
+        IModInjectionService modInjectionService,
         IApkTool apkTool,
         IJavaTool javaTool)
     {
         _gameDetector = gameDetector;
         _patchService = patchService;
+        _modInjectionService = modInjectionService;
         _apkTool = apkTool;
         _javaTool = javaTool;
     }
@@ -93,6 +96,22 @@ public class BuildService : IBuildService
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
             messages.Add($"Mobile package built: {outputPath}");
+
+            // Step 6: Inject mods (optional)
+            if (config.InjectMods)
+            {
+                progress?.Report("Injecting mods...");
+                var modInjectionResult = await InjectModsAsync(config);
+                if (modInjectionResult.Success)
+                {
+                    messages.Add($"Mods injected: {string.Join(", ", modInjectionResult.InjectedComponents)}");
+                    messages.Add($"Mod files: {modInjectionResult.FilesCopied} ({modInjectionResult.BytesCopied} bytes)");
+                }
+                else
+                {
+                    errors.Add($"Mod injection failed: {string.Join(", ", modInjectionResult.Errors)}");
+                }
+            }
 
             // Cleanup
             try
@@ -292,5 +311,29 @@ public class BuildService : IBuildService
             Errors = errors,
             Duration = duration
         };
+    }
+
+    private async Task<ModInjectionResult> InjectModsAsync(BuildConfig config)
+    {
+        var sourceModsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Balatro", "Mods");
+
+        // For build-time injection, we inject into a temporary location
+        // In a real implementation, this would be coordinated with save transfer
+        var targetModsPath = Path.Combine(Path.GetTempPath(), "BalatroMobile", "injected-mods");
+
+        var modConfig = new ModInjectionConfig
+        {
+            SourceModsPath = sourceModsPath,
+            TargetModsPath = targetModsPath,
+            IncludeLovelyDump = true,
+            IncludeSMODS = true,
+            IncludeLibraries = true,
+            CreateLovelyConfig = true,
+            ExcludedMods = new[] { "BrainstormRerollButton" } // Exclude known problematic mods for now
+        };
+
+        return await _modInjectionService.InjectModsAsync(modConfig);
     }
 }

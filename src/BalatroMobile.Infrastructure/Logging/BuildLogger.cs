@@ -17,18 +17,17 @@ public class BuildLogger : IDisposable
 
     public string LogFilePath => _logFilePath;
 
-    public BuildLogger()
+    public BuildLogger(string? logDirectory = null)
     {
-        var logDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BalatroMobile",
-            "logs");
+        // Use provided directory, or fall back to current working directory
+        // Logs are saved where the user runs the exe for easy access
+        var logDir = logDirectory ?? Environment.CurrentDirectory;
         
         Directory.CreateDirectory(logDir);
         
-        // Create timestamped log file
+        // Create timestamped log file in the working directory
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        _logFilePath = Path.Combine(logDir, $"build_{timestamp}.log");
+        _logFilePath = Path.Combine(logDir, $"BalatroMobile_build_{timestamp}.log");
         _buffer = new StringBuilder();
 
         // Write header

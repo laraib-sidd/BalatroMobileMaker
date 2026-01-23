@@ -408,16 +408,18 @@ public class BuildService : IBuildService
 
         // =====================================================
         // MANDATORY PATCHES - Always applied for mobile to work
+        // These match EXACTLY what blake502/balatro-mobile-maker does
+        // The PatchService replaces the ENTIRE LINE containing the search pattern
         // =====================================================
 
-        // 1. CRITICAL: Mobile Exit Fix
+        // 1. CRITICAL: Mobile Exit Fix (Patching.cs line 61-71)
         // The original game has obfuscated code that exits on mobile platforms
-        // The loadstring decodes to: if love.system.getOS() == 'iOS' or 'Android' then love.event.quit() end
+        // Search for line containing "loadstring" and replace entire line
         patches.Add(new PatchConfig
         {
             FilePath = "globals.lua",
             SearchPattern = "loadstring",
-            Replacement = @"-- Mobile compatibility patch (removed loadstring that forced exit on mobile)
+            Replacement = @"    -- Removed 'loadstring' line which generated lua code that exited upon starting on mobile
     if love.system.getOS() == 'Android' or love.system.getOS() == 'iOS' then
         self.F_SAVE_TIMER = 5
         self.F_DISCORD = true
@@ -427,35 +429,30 @@ public class BuildService : IBuildService
         self.F_VIDEO_SETTINGS = false
         self.F_ENGLISH_ONLY = false
         self.F_QUIT_BUTTON = false
-    end
-    --loadstring",
+    end",
             Description = "Mobile exit fix (CRITICAL)"
         });
 
-        // 2. On-screen keyboard support for touch input
+        // 2. On-screen keyboard support (Patching.cs line 73)
         patches.Add(new PatchConfig
         {
             FilePath = "functions/button_callbacks.lua",
-            SearchPattern = "if G.CONTROLLER.text_input_hook == e and G.CONTROLLER.HID.controller then",
-            Replacement = "if G.CONTROLLER.text_input_hook == e and (G.CONTROLLER.HID.controller or G.CONTROLLER.HID.touch) then",
+            SearchPattern = "G.CONTROLLER.text_input_hook == e and G.CONTROLLER.HID.controller",
+            Replacement = "  if G.CONTROLLER.text_input_hook == e and (G.CONTROLLER.HID.controller or G.CONTROLLER.HID.touch) then",
             Description = "On-screen keyboard support"
         });
 
-        // 3. Flame shader fix (required for most Android devices)
+        // 3. Flame shader GL_ES fix (Patching.cs line 76)
+        // Replaces the first line containing "#endif" with the GL_ES block
         patches.Add(new PatchConfig
         {
             FilePath = "resources/shaders/flame.fs",
-            SearchPattern = "#endif\n\nextern",
-            Replacement = @"#endif
-#ifdef GL_ES
-	precision MY_HIGHP_OR_MEDIUMP float;
-#endif
-
-extern",
+            SearchPattern = "#endif",
+            Replacement = "#endif\n#ifdef GL_ES\n\tprecision MY_HIGHP_OR_MEDIUMP float;\n#endif",
             Description = "Flame shader GL_ES fix"
         });
 
-        // 4. Flame shader function signature fix
+        // 4. Flame shader function signature fix (Patching.cs line 77)
         patches.Add(new PatchConfig
         {
             FilePath = "resources/shaders/flame.fs",
@@ -468,43 +465,43 @@ extern",
         // OPTIONAL PATCHES - User configurable
         // =====================================================
 
-        // FPS cap patch - caps to device refresh rate for better battery
+        // FPS cap patch (Patching.cs line 110/115)
         if (config.FpsCap != FpsCap.None)
         {
             var fpsValue = config.FpsCap == FpsCap.Default
-                ? "select(3, love.window.getMode())['refreshrate']"
+                ? "G.FPS_CAP or select(3, love.window.getMode())['refreshrate']"
                 : config.CustomFpsValue ?? "60";
 
             patches.Add(new PatchConfig
             {
                 FilePath = "main.lua",
-                SearchPattern = "G.FPS_CAP = G.FPS_CAP or 500",
-                Replacement = $"G.FPS_CAP = G.FPS_CAP or {fpsValue}",
+                SearchPattern = "G.FPS_CAP = G.FPS_CAP or",
+                Replacement = $"        G.FPS_CAP = {fpsValue}",
                 Description = "FPS cap configuration"
             });
         }
 
-        // Landscape lock - prevents portrait mode issues
+        // Landscape lock (Patching.cs line 123)
         if (config.EnableLandscape)
         {
             patches.Add(new PatchConfig
             {
                 FilePath = "functions/button_callbacks.lua",
                 SearchPattern = "resizable = true,",
-                Replacement = "resizable = not (love.system.getOS() == 'Android' or love.system.getOS() == 'iOS'),",
+                Replacement = "    resizable = not (love.system.getOS() == 'Android' or love.system.getOS() == 'iOS'),",
                 Description = "Landscape orientation lock"
             });
         }
 
-        // High DPI patches - better graphics on high-res devices
+        // High DPI patches (Patching.cs lines 130-131)
         if (config.EnableHighDpi)
         {
-            // Part 1: conf.lua - disable DPI scaling
+            // Part 1: conf.lua - add usedpiscale after t.window.width = 0
             patches.Add(new PatchConfig
             {
                 FilePath = "conf.lua",
-                SearchPattern = "t.window.minheight = 100",
-                Replacement = "t.window.minheight = 100\n    t.window.usedpiscale = false",
+                SearchPattern = "t.window.width = 0",
+                Replacement = "    t.window.width = 0\n    t.window.usedpiscale = false",
                 Description = "High DPI conf.lua patch"
             });
 
@@ -513,31 +510,42 @@ extern",
             {
                 FilePath = "functions/button_callbacks.lua",
                 SearchPattern = "highdpi = (love.system.getOS() == 'OS X')",
-                Replacement = "highdpi = (love.system.getOS() == 'OS X' or love.system.getOS() == 'Android' or love.system.getOS() == 'iOS')",
+                Replacement = "    highdpi = (love.system.getOS() == 'OS X' or love.system.getOS() == 'Android' or love.system.getOS() == 'iOS')",
                 Description = "High DPI button_callbacks patch"
             });
         }
 
-        // CRT shader disable - required for Pixel and some other devices
+        // CRT shader disable (Patching.cs lines 136-137)
         if (config.DisableCrtShader)
         {
+            // First patch: set crt = 0 in globals.lua
+            patches.Add(new PatchConfig
+            {
+                FilePath = "globals.lua",
+                SearchPattern = "crt = ",
+                Replacement = "            crt = 0,",
+                Description = "CRT shader value disable"
+            });
+
+            // Second patch: remove setShader call in game.lua
             patches.Add(new PatchConfig
             {
                 FilePath = "game.lua",
-                SearchPattern = "love.graphics.setShader( G.SHADERS['CRT'])",
-                Replacement = "-- love.graphics.setShader( G.SHADERS['CRT']) -- Disabled for mobile compatibility",
-                Description = "CRT shader disable"
+                SearchPattern = "G.SHADERS['CRT'])",
+                Replacement = "",
+                Description = "CRT shader call disable"
             });
         }
 
-        // External storage patch (not recommended)
+        // External storage patch (Patching.cs line 142)
+        // Note: Original uses "t.window.width = 0" as search pattern
         if (config.EnableExternalStorage)
         {
             patches.Add(new PatchConfig
             {
                 FilePath = "conf.lua",
-                SearchPattern = "t.window.minheight = 100",
-                Replacement = "t.window.minheight = 100\n    t.externalstorage = true",
+                SearchPattern = "t.window.width = 0",
+                Replacement = "    t.window.width = 0\n    t.externalstorage = true",
                 Description = "External storage configuration"
             });
         }

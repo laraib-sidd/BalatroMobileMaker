@@ -63,3 +63,4 @@ apktool.jar
 # Configuration files with sensitive data
 appsettings.local.json
 secrets.json
+local/*

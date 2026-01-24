@@ -12,19 +12,6 @@ public class GameExtractor
 {
     private readonly Action<string>? _progressCallback;
 
-    // #region agent log
-    private static readonly string _debugLogPath = Path.Combine(Environment.CurrentDirectory, "debug.log");
-    private static void DebugLog(string hypothesisId, string message, object? data = null)
-    {
-        try
-        {
-            var entry = System.Text.Json.JsonSerializer.Serialize(new { hypothesisId, location = "GameExtractor.cs", message, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session" });
-            File.AppendAllText(_debugLogPath, entry + "\n");
-        }
-        catch { }
-    }
-    // #endregion
-
     public GameExtractor(Action<string>? progressCallback = null)
     {
         _progressCallback = progressCallback;
@@ -68,10 +55,6 @@ public class GameExtractor
             // This matches the original tool: extractZip("Balatro.exe", "Balatro");
             ReportProgress("Trying direct ZIP extraction (like original tool)...");
             
-            // #region agent log
-            DebugLog("D", "ExtractGameAsync trying direct extraction", new { gameFilePath, extractPath });
-            // #endregion
-            
             try
             {
                 var fastZip = new FastZip();
@@ -79,23 +62,9 @@ public class GameExtractor
                 
                 var luaFiles = Directory.GetFiles(extractPath, "*.lua", SearchOption.AllDirectories);
                 
-                // #region agent log
-                DebugLog("D", "ExtractGameAsync direct extraction result", new { luaFilesFound = luaFiles.Length, sampleFiles = luaFiles.Take(5).Select(f => Path.GetFileName(f)).ToArray() });
-                // #endregion
-                
                 if (luaFiles.Length > 0)
                 {
                     ReportProgress($"Direct extraction successful! Found {luaFiles.Length} Lua files");
-                    
-                    // Log specific critical files
-                    var globalsExists = File.Exists(Path.Combine(extractPath, "globals.lua"));
-                    var mainExists = File.Exists(Path.Combine(extractPath, "main.lua"));
-                    var confExists = File.Exists(Path.Combine(extractPath, "conf.lua"));
-                    
-                    // #region agent log
-                    DebugLog("D", "ExtractGameAsync critical files check", new { globalsExists, mainExists, confExists });
-                    // #endregion
-                    
                     return true;
                 }
                 
@@ -107,9 +76,6 @@ public class GameExtractor
             }
             catch (Exception ex)
             {
-                // #region agent log
-                DebugLog("D", "ExtractGameAsync direct extraction failed", new { error = ex.Message });
-                // #endregion
                 ReportProgress($"Direct extraction failed: {ex.Message}, trying offset search...");
             }
 

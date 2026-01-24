@@ -185,6 +185,8 @@ return lovely";
             ReportProgress("Found BalatroMobileCompat (required for mobile)");
             
             // Create output directory
+            // SIMPLIFIED: Only transfer Mods folder (matching oneshot script approach)
+            // Stubs are already bundled in game.love - no need to duplicate in save directory
             var gameDir = Path.Combine(outputDir, "game");
             if (Directory.Exists(gameDir))
             {
@@ -192,58 +194,13 @@ return lovely";
             }
             Directory.CreateDirectory(gameDir);
             
-            // Step 1: Copy Mods folder
+            // Step 1: Copy Mods folder ONLY (this is what the oneshot script does)
             ReportProgress("Copying Mods folder...");
             var modsDestPath = Path.Combine(gameDir, "Mods");
             await CopyDirectoryAsync(modsPath, modsDestPath);
             result.Messages.Add("Copied Mods folder");
             
-            // Step 2: Copy Lovely dump files to game root
-            ReportProgress("Copying Lovely dump files...");
-            foreach (var item in Directory.GetFileSystemEntries(lovelyDumpPath))
-            {
-                var destPath = Path.Combine(gameDir, Path.GetFileName(item));
-                if (Directory.Exists(item))
-                {
-                    await CopyDirectoryAsync(item, destPath);
-                }
-                else
-                {
-                    File.Copy(item, destPath, true);
-                }
-            }
-            result.Messages.Add("Copied Lovely dump files");
-            
-            // Step 3: Create SMODS folder with version.lua
-            ReportProgress("Creating SMODS folder...");
-            var smodsLibPath = Path.Combine(modsPath, "smods");
-            var smodsDestPath = Path.Combine(gameDir, "SMODS");
-            Directory.CreateDirectory(smodsDestPath);
-            
-            var versionLuaPath = Path.Combine(smodsLibPath, "version.lua");
-            if (File.Exists(versionLuaPath))
-            {
-                File.Copy(versionLuaPath, Path.Combine(smodsDestPath, "version.lua"), true);
-            }
-            
-            var releaseLuaPath = Path.Combine(smodsLibPath, "release.lua");
-            if (File.Exists(releaseLuaPath))
-            {
-                File.Copy(releaseLuaPath, Path.Combine(smodsDestPath, "release.lua"), true);
-            }
-            result.Messages.Add("Created SMODS folder");
-            
-            // Step 4: Create nativefs stub
-            // CRITICAL: Create BOTH nativefs.lua and nativefs/init.lua because
-            // Lua's require searches for "nativefs.lua" BEFORE "nativefs/init.lua"
-            ReportProgress("Creating nativefs stub...");
-            var nativefsDir = Path.Combine(gameDir, "nativefs");
-            Directory.CreateDirectory(nativefsDir);
-            await File.WriteAllTextAsync(Path.Combine(nativefsDir, "init.lua"), NativefsStub);
-            await File.WriteAllTextAsync(Path.Combine(gameDir, "nativefs.lua"), NativefsStub);
-            result.Messages.Add("Created nativefs stubs");
-            
-            // Step 4b: Replace any FFI-based nativefs.lua files in mods
+            // Step 2: Replace any FFI-based nativefs.lua files in mods
             // These use LuaJIT FFI which doesn't work on Android
             ReportProgress("Replacing FFI nativefs files in mods...");
             var nativefsFilesToReplace = Directory.GetFiles(modsDestPath, "nativefs.lua", SearchOption.AllDirectories);
@@ -260,20 +217,7 @@ return lovely";
                 }
             }
             
-            // Step 5: Create lovely stub
-            // CRITICAL: Create BOTH lovely.lua (config) and lovely/init.lua (module)
-            ReportProgress("Creating lovely stub...");
-            var lovelyDir = Path.Combine(gameDir, "lovely");
-            Directory.CreateDirectory(lovelyDir);
-            await File.WriteAllTextAsync(Path.Combine(lovelyDir, "init.lua"), LovelyStub);
-            result.Messages.Add("Created lovely/init.lua stub");
-            
-            // Step 6: Create lovely.lua config
-            ReportProgress("Creating lovely.lua config...");
-            await File.WriteAllTextAsync(Path.Combine(gameDir, "lovely.lua"), LovelyConfig);
-            result.Messages.Add("Created lovely.lua config");
-            
-            // Step 7: Clean macOS metadata files
+            // Step 3: Clean macOS metadata files
             ReportProgress("Cleaning macOS metadata files...");
             await CleanMacOsMetadataAsync(gameDir);
             result.Messages.Add("Cleaned ._* metadata files");

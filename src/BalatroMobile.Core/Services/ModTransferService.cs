@@ -12,42 +12,120 @@ public class ModTransferService
     private readonly Action<string>? _progressCallback;
     
     // Stub content for nativefs (Android-compatible wrapper for love.filesystem)
-    private const string NativefsStub = @"-- NativeFS stub for Android
--- Wraps love.filesystem for compatibility
+    // CRITICAL: This stub must resolve paths relative to the working directory
+    // because SMODS sets working directory then reads with relative paths
+    private const string NativefsStub = @"-- NativeFS stub for Android - with working directory support
 local nfs = {}
 local lf = love.filesystem
 local _workingDir = """"
 
-function nfs.read(path) return lf.read(path) end
-function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
-function nfs.getInfo(path) return lf.getInfo(path) end
-function nfs.setWorkingDirectory(dir) _workingDir = dir or """"; return true end
+-- Helper to resolve paths relative to working directory
+-- This is CRITICAL for SMODS asset loading!
+local function resolvePath(path)
+    if not path then return path end
+    if path:sub(1,1) == ""/"" then return path end  -- absolute path
+    if _workingDir ~= """" then
+        return _workingDir .. ""/"" .. path
+    end
+    return path
+end
+
+function nfs.read(path)
+    local resolved = resolvePath(path)
+    local data = lf.read(resolved)
+    if data then return data end
+    -- Fallback to original path
+    return lf.read(path)
+end
+
+function nfs.load(path)
+    local resolved = resolvePath(path)
+    local chunk = lf.load(resolved)
+    if chunk then return chunk end
+    return lf.load(path)
+end
+
+function nfs.getDirectoryItems(dir)
+    local resolved = resolvePath(dir)
+    local items = lf.getDirectoryItems(resolved)
+    if items and #items > 0 then return items end
+    return lf.getDirectoryItems(dir) or {}
+end
+
+function nfs.getDirectoryItemsInfo(dir, filtertype)
+    local resolved = resolvePath(dir)
+    local items = lf.getDirectoryItems(resolved)
+    if not items or #items == 0 then
+        items = lf.getDirectoryItems(dir) or {}
+        resolved = dir
+    end
+    local result = {}
+    for _, item in ipairs(items) do
+        local fullpath = resolved .. ""/"" .. item
+        local info = lf.getInfo(fullpath)
+        if info then
+            if not filtertype or info.type == filtertype then
+                info.name = item
+                table.insert(result, info)
+            end
+        end
+    end
+    return result
+end
+
+function nfs.getInfo(path)
+    local resolved = resolvePath(path)
+    local info = lf.getInfo(resolved)
+    if info then return info end
+    return lf.getInfo(path)
+end
+
+function nfs.setWorkingDirectory(dir)
+    _workingDir = dir or """"
+    return true
+end
+
 function nfs.getWorkingDirectory()
     if _workingDir == """" then return lf.getSaveDirectory() end
     return _workingDir
 end
-function nfs.write(path, data) return lf.write(path, data) end
-function nfs.append(path, data) return lf.append(path, data) end
-function nfs.createDirectory(path) return lf.createDirectory(path) end
-function nfs.remove(path) return lf.remove(path) end
-function nfs.getRealDirectory(path) return lf.getRealDirectory(path) end
+
+function nfs.write(path, data) return lf.write(resolvePath(path), data) end
+function nfs.append(path, data) return lf.append(resolvePath(path), data) end
+function nfs.createDirectory(path) return lf.createDirectory(resolvePath(path)) end
+function nfs.remove(path) return lf.remove(resolvePath(path)) end
+function nfs.getRealDirectory(path) return lf.getRealDirectory(resolvePath(path)) end
 function nfs.getSaveDirectory() return lf.getSaveDirectory() end
 function nfs.getSourceBaseDirectory() return lf.getSourceBaseDirectory and lf.getSourceBaseDirectory() or """" end
+
 function nfs.isFile(path)
-    local info = lf.getInfo(path)
+    local resolved = resolvePath(path)
+    local info = lf.getInfo(resolved)
+    if not info then info = lf.getInfo(path) end
     return info and info.type == ""file""
 end
+
 function nfs.isDirectory(path)
-    local info = lf.getInfo(path)
+    local resolved = resolvePath(path)
+    local info = lf.getInfo(resolved)
+    if not info then info = lf.getInfo(path) end
     return info and info.type == ""directory""
 end
+
+function nfs.mount(archive, mountpoint, appendToPath) return lf.mount(archive, mountpoint, appendToPath) end
+function nfs.unmount(archive) return lf.unmount(archive) end
+function nfs.lines(path) return lf.lines(resolvePath(path)) end
+function nfs.newFile(path, mode) return lf.newFile(resolvePath(path), mode) end
+function nfs.newFileData(contents, name) return lf.newFileData(contents, name) end
 
 return nfs";
 
     // Stub content for lovely module
+    // CRITICAL: Must include 'path' field for SMODS compatibility
     private const string LovelyStub = @"-- Lovely stub for mobile
 local lovely = {}
 lovely.mod_dir = ""Mods""
+lovely.path = ""Mods""  -- Required for SMODS.path to work
 lovely.version = ""0.6.0""
 return lovely";
 
@@ -159,13 +237,34 @@ return lovely";
             result.Messages.Add("Created SMODS folder");
             
             // Step 4: Create nativefs stub
+            // CRITICAL: Create BOTH nativefs.lua and nativefs/init.lua because
+            // Lua's require searches for "nativefs.lua" BEFORE "nativefs/init.lua"
             ReportProgress("Creating nativefs stub...");
             var nativefsDir = Path.Combine(gameDir, "nativefs");
             Directory.CreateDirectory(nativefsDir);
             await File.WriteAllTextAsync(Path.Combine(nativefsDir, "init.lua"), NativefsStub);
-            result.Messages.Add("Created nativefs/init.lua stub");
+            await File.WriteAllTextAsync(Path.Combine(gameDir, "nativefs.lua"), NativefsStub);
+            result.Messages.Add("Created nativefs stubs");
+            
+            // Step 4b: Replace any FFI-based nativefs.lua files in mods
+            // These use LuaJIT FFI which doesn't work on Android
+            ReportProgress("Replacing FFI nativefs files in mods...");
+            var nativefsFilesToReplace = Directory.GetFiles(modsDestPath, "nativefs.lua", SearchOption.AllDirectories);
+            foreach (var nativefsFile in nativefsFilesToReplace)
+            {
+                try
+                {
+                    await File.WriteAllTextAsync(nativefsFile, NativefsStub);
+                    result.Messages.Add($"Replaced {Path.GetRelativePath(gameDir, nativefsFile)}");
+                }
+                catch (Exception ex)
+                {
+                    result.Messages.Add($"Warning: Could not replace {nativefsFile}: {ex.Message}");
+                }
+            }
             
             // Step 5: Create lovely stub
+            // CRITICAL: Create BOTH lovely.lua (config) and lovely/init.lua (module)
             ReportProgress("Creating lovely stub...");
             var lovelyDir = Path.Combine(gameDir, "lovely");
             Directory.CreateDirectory(lovelyDir);

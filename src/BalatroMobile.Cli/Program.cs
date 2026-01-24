@@ -35,6 +35,10 @@ internal class Program
             {
                 await RunToolsCommand(args.Skip(1).ToArray());
             }
+            else if (args[0] == "mods")
+            {
+                await RunModsCommand(args.Skip(1).ToArray());
+            }
             else if (args[0] == "--help" || args[0] == "-h")
             {
                 ShowUsage();
@@ -824,26 +828,33 @@ internal class Program
             Console.WriteLine("Build completed successfully!");
             Console.WriteLine();
             
-            bool transferSaves = AskYesNo("Transfer saves from PC to Android device?", false);
-            if (transferSaves)
+            // Ask about mod transfer (the main use case)
+            bool transferMods = AskYesNo("Transfer mods to Android device? (requires USB + ADB)", true);
+            if (transferMods)
             {
-                await RunTransfer(new[] { "--from", "pc", "--to", "android" });
+                Console.WriteLine();
+                Console.WriteLine("=== MOD TRANSFER ===");
+                Console.WriteLine();
+                
+                bool installFirst = AskYesNo("Install APK to device first?", true);
+                
+                var modsArgs = new List<string>();
+                if (installFirst)
+                {
+                    modsArgs.Add("--install-apk");
+                    modsArgs.Add("--apk");
+                    modsArgs.Add(outputFile);
+                }
+                
+                await RunModsCommand(modsArgs.ToArray());
             }
             else
             {
-                bool pullSaves = AskYesNo("Would you like to pull saves from your Android device?", false);
-                if (pullSaves)
+                // Legacy save transfer option
+                bool transferSaves = AskYesNo("Transfer saves from PC to Android device?", false);
+                if (transferSaves)
                 {
-                    Console.WriteLine("Warning! This will overwrite your PC saves!");
-                    bool backupConfirmed = AskYesNo("Have you backed up your PC saves?", false);
-                    if (backupConfirmed)
-                    {
-                        await RunTransfer(new[] { "--from", "android", "--to", "pc" });
-                    }
-                    else
-                    {
-                        Console.WriteLine("Please back up your saves first!");
-                    }
+                    await RunTransfer(new[] { "--from", "pc", "--to", "android" });
                 }
             }
         }
@@ -966,6 +977,131 @@ internal class Program
         }
     }
 
+    private static async Task RunModsCommand(string[] args)
+    {
+        Console.WriteLine("BalatroMobile Mod Transfer");
+        Console.WriteLine("==========================");
+        Console.WriteLine();
+
+        var modService = new ModTransferService(msg => Console.WriteLine($"  {msg}"));
+
+        // Parse arguments
+        bool prepareOnly = args.Contains("--prepare-only");
+        bool transferOnly = args.Contains("--transfer-only");
+        bool installApk = args.Contains("--install-apk");
+        string? apkPath = null;
+        
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--apk" && i + 1 < args.Length)
+            {
+                apkPath = args[i + 1];
+            }
+        }
+
+        var outputDir = Path.Combine(Environment.CurrentDirectory, "mod-package");
+
+        if (!transferOnly)
+        {
+            // Step 1: Prepare mod package
+            Console.WriteLine("Step 1: Preparing mod package...");
+            Console.WriteLine();
+            
+            var prepareResult = await modService.PrepareModPackageAsync(outputDir);
+            
+            if (!prepareResult.Success)
+            {
+                Console.WriteLine();
+                Console.WriteLine("ERROR: Failed to prepare mod package!");
+                foreach (var error in prepareResult.Errors)
+                {
+                    Console.WriteLine($"  - {error}");
+                }
+                return;
+            }
+            
+            Console.WriteLine();
+            Console.WriteLine("Mod package prepared successfully!");
+            Console.WriteLine($"Output: {prepareResult.OutputPath}");
+            Console.WriteLine();
+
+            if (prepareOnly)
+            {
+                Console.WriteLine("Mod package is ready. Use --transfer-only to transfer to device.");
+                return;
+            }
+        }
+
+        // Step 2: Install APK if specified
+        if (installApk || !string.IsNullOrEmpty(apkPath))
+        {
+            apkPath ??= Path.Combine(Environment.CurrentDirectory, "balatro.apk");
+            
+            if (!File.Exists(apkPath))
+            {
+                Console.WriteLine($"APK not found: {apkPath}");
+                Console.WriteLine("Build the APK first using: BalatroMobile build");
+                return;
+            }
+            
+            Console.WriteLine("Step 2: Installing APK...");
+            Console.WriteLine();
+            
+            var installed = await modService.InstallApkAsync(apkPath);
+            if (!installed)
+            {
+                Console.WriteLine("WARNING: APK installation failed. Please install manually.");
+            }
+            else
+            {
+                // Launch app once to create directories
+                Console.WriteLine();
+                Console.WriteLine("Launching app to create directories...");
+                await modService.LaunchAppAsync();
+                await Task.Delay(3000); // Wait 3 seconds
+                await modService.StopAppAsync();
+                Console.WriteLine();
+            }
+        }
+
+        // Step 3: Transfer mods to device
+        Console.WriteLine("Step 3: Transferring mods to device...");
+        Console.WriteLine();
+        
+        var gamePath = Path.Combine(outputDir, "game");
+        if (!Directory.Exists(gamePath))
+        {
+            Console.WriteLine("ERROR: Mod package not found. Run without --transfer-only first.");
+            return;
+        }
+        
+        var transferResult = await modService.TransferToDeviceAsync(gamePath);
+        
+        if (!transferResult.Success)
+        {
+            Console.WriteLine();
+            Console.WriteLine("ERROR: Failed to transfer mods!");
+            foreach (var error in transferResult.Errors)
+            {
+                Console.WriteLine($"  - {error}");
+            }
+            Console.WriteLine();
+            Console.WriteLine("Tips:");
+            Console.WriteLine("  1. Make sure your device is connected via USB");
+            Console.WriteLine("  2. Enable USB debugging in Developer Options");
+            Console.WriteLine("  3. Accept the USB debugging prompt on your device");
+            Console.WriteLine("  4. Install the APK and launch it once before transferring");
+            return;
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("=== SUCCESS ===");
+        Console.WriteLine();
+        Console.WriteLine("Mods have been transferred to your device!");
+        Console.WriteLine("Launch Balatro on your device to play with mods.");
+        Console.WriteLine();
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("BalatroMobile - Build Balatro for Mobile Devices");
@@ -973,30 +1109,39 @@ internal class Program
         Console.WriteLine("Usage:");
         Console.WriteLine("  BalatroMobile                        - Interactive mode (recommended)");
         Console.WriteLine("  BalatroMobile check                  - Run pre-flight checks");
-        Console.WriteLine("  BalatroMobile build [options]        - Build for mobile");
+        Console.WriteLine("  BalatroMobile build [options]        - Build APK for mobile");
+        Console.WriteLine("  BalatroMobile mods [options]         - Prepare and transfer mods to device");
         Console.WriteLine("  BalatroMobile transfer [options]     - Transfer saves between PC and Android");
         Console.WriteLine("  BalatroMobile tools [status|download|clear] - Manage build tools");
+        Console.WriteLine();
+        Console.WriteLine("Complete Workflow:");
+        Console.WriteLine("  1. BalatroMobile build               # Build the APK");
+        Console.WriteLine("  2. BalatroMobile mods --install-apk  # Install APK + transfer mods");
         Console.WriteLine();
         Console.WriteLine("Build Options:");
         Console.WriteLine("  --fps <default|none|60>             - FPS cap (default: default)");
         Console.WriteLine("  --no-landscape                       - Disable landscape lock");
         Console.WriteLine("  --high-dpi                           - Enable high DPI mode");
         Console.WriteLine("  --disable-crt                        - Disable CRT shader");
-        Console.WriteLine("  --inject-mods                        - Inject mods during build (ADB not required)");
+        Console.WriteLine("  --inject-mods                        - Inject mods during build");
         Console.WriteLine("  --output <path>                      - Output file path");
         Console.WriteLine();
-        Console.WriteLine("Transfer Options (requires ADB):");
+        Console.WriteLine("Mods Options (requires ADB):");
+        Console.WriteLine("  --prepare-only                       - Only prepare mod package, don't transfer");
+        Console.WriteLine("  --transfer-only                      - Only transfer (use existing package)");
+        Console.WriteLine("  --install-apk                        - Install APK before transferring mods");
+        Console.WriteLine("  --apk <path>                         - Path to APK file (default: balatro.apk)");
+        Console.WriteLine();
+        Console.WriteLine("Transfer Options (for saves):");
         Console.WriteLine("  --from <pc|android>                  - Source platform (default: pc)");
         Console.WriteLine("  --to <android|pc>                    - Target platform (default: android)");
         Console.WriteLine("  --no-backup                          - Skip backup creation");
-        Console.WriteLine("  --no-mods                            - Skip mod-related files");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  BalatroMobile build --inject-mods    # Create modded APK (no ADB needed)");
-        Console.WriteLine("  BalatroMobile transfer               # Transfer saves (requires ADB)");
-        Console.WriteLine("  BalatroMobile transfer --from android --to pc");
-        Console.WriteLine();
-        Console.WriteLine("NOTE: ADB is only required for save transfer, not for building modded APKs.");
+        Console.WriteLine("  BalatroMobile build                  # Build vanilla APK");
+        Console.WriteLine("  BalatroMobile mods --install-apk     # Full workflow: install + mods");
+        Console.WriteLine("  BalatroMobile mods --prepare-only    # Just prepare mod package");
+        Console.WriteLine("  BalatroMobile mods --transfer-only   # Transfer existing package");
         Console.WriteLine();
         WaitForKeyPress();
     }

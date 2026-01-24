@@ -318,14 +318,19 @@ return lovely";
             ReportProgress("ADB connection verified");
             
             // Create tar archive
-            ReportProgress("Creating transfer archive...");
+            // Note: This can take 30-60 seconds for large mod folders
+            var modFolderSize = GetDirectorySize(modPackagePath);
+            ReportProgress($"Creating transfer archive ({modFolderSize / 1024.0 / 1024.0:F1} MB)...");
+            ReportProgress("  This may take 30-60 seconds, please wait...");
+            
             var tarPath = Path.Combine(Path.GetDirectoryName(modPackagePath)!, "mod-transfer.tar");
             if (File.Exists(tarPath))
             {
                 File.Delete(tarPath);
             }
             
-            var tarResult = await RunProcessAsync("tar", $"-cvf \"{tarPath}\" -C \"{modPackagePath}\" .");
+            // Use quiet mode (-cf not -cvf) to avoid flooding output
+            var tarResult = await RunProcessAsync("tar", $"-cf \"{tarPath}\" -C \"{modPackagePath}\" .");
             if (!tarResult.Success)
             {
                 result.Errors.Add($"Failed to create tar archive: {tarResult.Error}");
@@ -665,6 +670,20 @@ return lovely";
         // Use bundled ADB if path was provided, otherwise use system ADB
         var adbExecutable = _adbPath ?? "adb";
         return await RunProcessAsync(adbExecutable, arguments);
+    }
+
+    private long GetDirectorySize(string path)
+    {
+        if (!Directory.Exists(path)) return 0;
+        try
+        {
+            return Directory.GetFiles(path, "*", SearchOption.AllDirectories)
+                .Sum(f => new FileInfo(f).Length);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private async Task<ProcessResult> RunProcessAsync(string fileName, string arguments)

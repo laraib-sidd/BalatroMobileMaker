@@ -1064,12 +1064,19 @@ internal class Program
             }
             else
             {
-                // Launch app once to create directories
+                // Let user manually start game to create directories
                 Console.WriteLine();
-                Console.WriteLine("Launching app to create directories...");
-                await modService.LaunchAppAsync();
-                await Task.Delay(3000); // Wait 3 seconds
-                await modService.StopAppAsync();
+                Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
+                Console.WriteLine("║  IMPORTANT: Please start the game once on your device!       ║");
+                Console.WriteLine("║                                                              ║");
+                Console.WriteLine("║  1. Find and tap the Balatro app on your Android device      ║");
+                Console.WriteLine("║  2. Wait for it to load (you may see 'NO GAME' - that's OK)  ║");
+                Console.WriteLine("║  3. Close the app completely                                 ║");
+                Console.WriteLine("║  4. Press Enter here to continue                             ║");
+                Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
+                Console.WriteLine();
+                Console.Write("Press Enter when done...");
+                Console.ReadLine();
                 Console.WriteLine();
             }
         }

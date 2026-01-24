@@ -64,3 +64,5 @@ apktool.jar
 appsettings.local.json
 secrets.json
 local/*
+local-export.rar
+*.rar

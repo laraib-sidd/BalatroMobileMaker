@@ -8,19 +8,6 @@ public class ApkTool : IApkTool
     private readonly string _apkToolJarPath;
     private readonly string? _uberApkSignerPath;
 
-    // #region agent log
-    private static readonly string _debugLogPath = Path.Combine(Environment.CurrentDirectory, "debug.log");
-    private static void DebugLog(string hypothesisId, string message, object? data = null)
-    {
-        try
-        {
-            var entry = System.Text.Json.JsonSerializer.Serialize(new { hypothesisId, location = "ApkTool.cs", message, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session" });
-            File.AppendAllText(_debugLogPath, entry + "\n");
-        }
-        catch { }
-    }
-    // #endregion
-
     public ApkTool(IJavaTool javaTool, string apkToolJarPath, string? uberApkSignerPath = null)
     {
         _javaTool = javaTool;
@@ -32,87 +19,42 @@ public class ApkTool : IApkTool
     {
         if (!File.Exists(apkPath))
         {
-            // #region agent log
-            DebugLog("A", "DecompileAsync APK not found", new { apkPath });
-            // #endregion
             return false;
         }
 
         // Match original tool's JVM arguments exactly
         var arguments = $"-Xmx1G -Duser.language=en -Dfile.encoding=UTF8 -Djdk.util.zip.disableZip64ExtraFieldValidation=true -Djdk.nio.zipfs.allowDotZipEntry=true -jar \"{_apkToolJarPath}\" d -s -o \"{outputPath}\" \"{apkPath}\"";
-        
-        // #region agent log
-        DebugLog("A", "DecompileAsync executing", new { arguments, apkPath, outputPath });
-        // #endregion
-        
-        var result = await _javaTool.ExecuteAsync(arguments);
-        
-        // #region agent log
-        DebugLog("A", "DecompileAsync result", new { result, outputExists = Directory.Exists(outputPath) });
-        // #endregion
-        
-        return result;
+        return await _javaTool.ExecuteAsync(arguments);
     }
 
     public async Task<bool> CompileAsync(string inputPath, string outputPath)
     {
         if (!Directory.Exists(inputPath))
         {
-            // #region agent log
-            DebugLog("A", "CompileAsync input dir not found", new { inputPath });
-            // #endregion
             return false;
         }
 
         // Match original tool's JVM arguments exactly
         var arguments = $"-Xmx1G -Duser.language=en -Dfile.encoding=UTF8 -Djdk.util.zip.disableZip64ExtraFieldValidation=true -Djdk.nio.zipfs.allowDotZipEntry=true -jar \"{_apkToolJarPath}\" b -o \"{outputPath}\" \"{inputPath}\"";
-        
-        // #region agent log
-        DebugLog("A", "CompileAsync executing", new { arguments, inputPath, outputPath });
-        // #endregion
-        
-        var result = await _javaTool.ExecuteAsync(arguments);
-        
-        // #region agent log
-        DebugLog("A", "CompileAsync result", new { result, outputExists = File.Exists(outputPath) });
-        // #endregion
-        
-        return result;
+        return await _javaTool.ExecuteAsync(arguments);
     }
 
     public async Task<bool> SignAsync(string apkPath)
     {
         if (string.IsNullOrEmpty(_uberApkSignerPath) || !File.Exists(_uberApkSignerPath))
         {
-            // #region agent log
-            DebugLog("B", "SignAsync signer not available", new { _uberApkSignerPath });
-            // #endregion
             // No signer available - APK will be unsigned (can still be installed with adb)
             return true;
         }
 
         if (!File.Exists(apkPath))
         {
-            // #region agent log
-            DebugLog("B", "SignAsync APK not found", new { apkPath });
-            // #endregion
             return false;
         }
 
         // Match original tool: -jar uber-apk-signer.jar -a balatro.apk
         var arguments = $"-jar \"{_uberApkSignerPath}\" -a \"{apkPath}\"";
-        
-        // #region agent log
-        DebugLog("B", "SignAsync executing", new { arguments, apkPath });
-        // #endregion
-        
-        var result = await _javaTool.ExecuteAsync(arguments);
-        
-        // #region agent log
-        DebugLog("B", "SignAsync result", new { result });
-        // #endregion
-        
-        return result;
+        return await _javaTool.ExecuteAsync(arguments);
     }
 
     public async Task<bool> IsAvailableAsync()

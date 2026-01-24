@@ -11,18 +11,6 @@ namespace BalatroMobile.Core.Services;
 /// </summary>
 public class PatchService : IPatchService
 {
-    // #region agent log
-    private static readonly string _debugLogPath = Path.Combine(Environment.CurrentDirectory, "debug.log");
-    private static void DebugLog(string hypothesisId, string message, object? data = null)
-    {
-        try
-        {
-            var entry = System.Text.Json.JsonSerializer.Serialize(new { hypothesisId, location = "PatchService.cs", message, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session" });
-            File.AppendAllText(_debugLogPath, entry + "\n");
-        }
-        catch { }
-    }
-    // #endregion
     public async Task<IEnumerable<PatchResult>> ApplyPatchesAsync(IEnumerable<PatchConfig> patches, string basePath)
     {
         var results = new List<PatchResult>();
@@ -87,15 +75,8 @@ public class PatchService : IPatchService
     {
         var filePath = Path.Combine(basePath, patch.FilePath);
 
-        // #region agent log
-        DebugLog("E", $"ApplyPatch START: {patch.Description}", new { filePath, searchPattern = patch.SearchPattern, fileExists = File.Exists(filePath) });
-        // #endregion
-
         if (!File.Exists(filePath))
         {
-            // #region agent log
-            DebugLog("E", $"ApplyPatch FILE NOT FOUND: {patch.Description}", new { filePath });
-            // #endregion
             return new PatchResult
             {
                 Success = false,
@@ -108,30 +89,18 @@ public class PatchService : IPatchService
         // Read file as LINES (like the original tool)
         var lines = await File.ReadAllLinesAsync(filePath);
         
-        // #region agent log
-        DebugLog("E", $"ApplyPatch read file: {patch.FilePath}", new { totalLines = lines.Length });
-        // #endregion
-        
         // Find the FIRST line containing the search pattern
         bool found = false;
-        int foundLineNum = -1;
-        string? originalLine = null;
         for (int i = 0; i < lines.Length; i++)
         {
             if (lines[i].IndexOf(patch.SearchPattern, StringComparison.Ordinal) != -1)
             {
-                foundLineNum = i;
-                originalLine = lines[i];
                 // Replace the ENTIRE LINE with the replacement text
                 lines[i] = patch.Replacement;
                 found = true;
                 break; // Only replace the first occurrence
             }
         }
-
-        // #region agent log
-        DebugLog("E", $"ApplyPatch search result: {patch.Description}", new { found, foundLineNum, originalLine = originalLine?.Substring(0, Math.Min(100, originalLine?.Length ?? 0)), searchPattern = patch.SearchPattern });
-        // #endregion
 
         if (!found)
         {
@@ -146,10 +115,6 @@ public class PatchService : IPatchService
 
         // Write back as lines (like the original tool)
         await File.WriteAllLinesAsync(filePath, lines);
-
-        // #region agent log
-        DebugLog("E", $"ApplyPatch SUCCESS: {patch.Description}", new { foundLineNum });
-        // #endregion
 
         return new PatchResult
         {

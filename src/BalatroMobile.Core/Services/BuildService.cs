@@ -290,6 +290,19 @@ public class BuildService : IBuildService
             Directory.CreateDirectory(assetsPath);
             Console.WriteLine($"[BUILD] Assets folder exists after create: {Directory.Exists(assetsPath)}");
             
+            // CRITICAL: Delete placeholder files from LÖVE APK that interfere with game.love loading
+            // LÖVE Android loads main.love or main.lua BEFORE game.love if they exist!
+            var placeholderFiles = new[] { "main.love", "main.lua" };
+            foreach (var placeholder in placeholderFiles)
+            {
+                var placeholderPath = Path.Combine(assetsPath, placeholder);
+                if (File.Exists(placeholderPath))
+                {
+                    Console.WriteLine($"[BUILD] REMOVING placeholder: {placeholder} (prevents game.love from loading!)");
+                    File.Delete(placeholderPath);
+                }
+            }
+            
             var targetGameLovePath = Path.Combine(assetsPath, "game.love");
             Console.WriteLine($"[BUILD] Source game.love: {gameLovePath}");
             Console.WriteLine($"[BUILD] Source exists: {File.Exists(gameLovePath)}");

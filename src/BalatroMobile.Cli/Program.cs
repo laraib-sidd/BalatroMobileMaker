@@ -68,7 +68,6 @@ internal class Program
             var enableLandscape = true;
             var enableHighDpi = false;
             var disableCrtShader = false;
-            var injectMods = false;
             var outputPath = "balatro.apk";
 
             // Simple argument parsing (could be improved with a proper CLI library)
@@ -107,9 +106,6 @@ internal class Program
                     case "--disable-crt":
                         disableCrtShader = true;
                         break;
-                    case "--inject-mods":
-                        injectMods = true;
-                        break;
                     case "--output":
                         if (i + 1 < args.Length)
                         {
@@ -127,7 +123,6 @@ internal class Program
                 EnableLandscape = enableLandscape,
                 EnableHighDpi = enableHighDpi,
                 DisableCrtShader = disableCrtShader,
-                InjectMods = injectMods,
                 OutputPath = outputPath
             };
 
@@ -149,8 +144,9 @@ internal class Program
             Console.WriteLine($"Landscape: {config.EnableLandscape}");
             Console.WriteLine($"High DPI: {config.EnableHighDpi}");
             Console.WriteLine($"Disable CRT: {config.DisableCrtShader}");
-            Console.WriteLine($"Inject Mods: {config.InjectMods}");
             Console.WriteLine($"Output: {config.OutputPath}");
+            Console.WriteLine();
+            Console.WriteLine("Note: Use 'BalatroMobile mods' after build to transfer mods to device.");
             Console.WriteLine();
             
             // Log build configuration
@@ -160,7 +156,7 @@ internal class Program
                 config.EnableLandscape,
                 config.EnableHighDpi,
                 config.DisableCrtShader,
-                config.InjectMods,
+                false, // Mods are not injected into APK
                 config.OutputPath);
 
             // Initialize tools manager (handles auto-downloading of required tools)
@@ -224,14 +220,12 @@ internal class Program
             // Create services using the tools manager paths
             var gameDetector = new GameDetector();
             var patchService = new PatchService();
-            var modInjectionService = new ModInjectionService();
             var javaPath = toolsManager.GetJavaExecutablePath();
             var javaTool = new JavaTool(javaPath);
             var apkTool = new ApkTool(javaTool, toolsManager.ApkToolPath, toolsManager.UberApkSignerPath);
             var buildService = new BuildService(
                 gameDetector, 
                 patchService, 
-                modInjectionService, 
                 apkTool, 
                 javaTool, 
                 toolsManager.Love2dApkPath,
@@ -649,8 +643,9 @@ internal class Program
         Console.WriteLine("  Landscape Lock:  Yes");
         Console.WriteLine("  High DPI:        Yes");
         Console.WriteLine("  CRT Shader:      Enabled (disable for Pixel devices)");
-        Console.WriteLine("  Include Mods:    Yes");
         Console.WriteLine("  Output:          balatro.apk");
+        Console.WriteLine();
+        Console.WriteLine("  Note: Use 'BalatroMobile mods' after build to transfer mods");
         Console.WriteLine();
         Console.WriteLine("==============================");
         Console.WriteLine();
@@ -679,7 +674,6 @@ internal class Program
         bool applyLandscapePatch = true;
         bool applyHighDpiPatch = true;
         bool applyCrtPatch = false;
-        bool injectMods = true;
         string outputFile = "balatro.apk";
 
         if (choice == 2)
@@ -707,7 +701,6 @@ internal class Program
             applyLandscapePatch = AskYesNo("Apply landscape orientation lock?", true);
             applyHighDpiPatch = AskYesNo("Apply high DPI patch? (recommended for high-res screens)", true);
             applyCrtPatch = AskYesNo("Disable CRT shader? (Required for Pixel and some devices!)", false);
-            injectMods = AskYesNo("Include mods (Cryptid, Talisman, etc.)?", true);
 
             Console.WriteLine();
             Console.Write("Output filename (Enter for 'balatro.apk'): ");
@@ -760,11 +753,6 @@ internal class Program
             buildArgs.Add("--disable-crt");
         }
 
-        if (injectMods)
-        {
-            buildArgs.Add("--inject-mods");
-        }
-
         if (outputFile != "balatro.apk")
         {
             buildArgs.Add("--output");
@@ -801,8 +789,9 @@ internal class Program
             Console.WriteLine($"  Landscape Lock:  {(applyLandscapePatch ? "Yes" : "No")}");
             Console.WriteLine($"  High DPI:        {(applyHighDpiPatch ? "Yes" : "No")}");
             Console.WriteLine($"  CRT Shader:      {(applyCrtPatch ? "Disabled" : "Enabled")}");
-            Console.WriteLine($"  Include Mods:    {(injectMods ? "Yes" : "No")}");
             Console.WriteLine($"  Output:          {outputFile}");
+            Console.WriteLine();
+            Console.WriteLine("  Note: Mods will be transferred via ADB after build");
             Console.WriteLine("=================================");
             Console.WriteLine();
 
@@ -1123,7 +1112,6 @@ internal class Program
         Console.WriteLine("  --no-landscape                       - Disable landscape lock");
         Console.WriteLine("  --high-dpi                           - Enable high DPI mode");
         Console.WriteLine("  --disable-crt                        - Disable CRT shader");
-        Console.WriteLine("  --inject-mods                        - Inject mods during build");
         Console.WriteLine("  --output <path>                      - Output file path");
         Console.WriteLine();
         Console.WriteLine("Mods Options (requires ADB):");

@@ -172,7 +172,7 @@ return lovely";
             {
                 result.Errors.Add("BalatroMobileCompat not found!");
                 result.Errors.Add("This mod is REQUIRED for mods to work on mobile.");
-                result.Errors.Add("Download from: https://github.com/MathIsFun0/BalatroMobileCompat");
+                result.Errors.Add("Download from: https://github.com/eeve-lyn/BalatroMobileCompat");
                 result.Errors.Add($"Install to: {mobileCompatPath}");
                 return result;
             }

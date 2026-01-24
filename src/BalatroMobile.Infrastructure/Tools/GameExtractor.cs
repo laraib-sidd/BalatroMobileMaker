@@ -183,10 +183,28 @@ public class GameExtractor
     /// </summary>
     public async Task<bool> CreateGameLoveAsync(string sourceDir, string outputPath)
     {
+        Console.WriteLine("=== CREATE GAME.LOVE ===");
+        Console.WriteLine($"[LOVE] Source directory: {sourceDir}");
+        Console.WriteLine($"[LOVE] Output path: {outputPath}");
+        
         if (!Directory.Exists(sourceDir))
         {
+            Console.WriteLine($"[LOVE] ERROR: Source directory not found!");
             ReportProgress($"Source directory not found: {sourceDir}");
             return false;
+        }
+
+        // Count files in source directory
+        var allFiles = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+        var luaFiles = allFiles.Where(f => f.EndsWith(".lua")).ToArray();
+        Console.WriteLine($"[LOVE] Source contains {allFiles.Length} total files, {luaFiles.Length} .lua files");
+        
+        // Verify critical files exist
+        var criticalFiles = new[] { "main.lua", "conf.lua" };
+        foreach (var cf in criticalFiles)
+        {
+            var cfPath = Path.Combine(sourceDir, cf);
+            Console.WriteLine($"[LOVE] {cf} exists: {File.Exists(cfPath)}");
         }
 
         try
@@ -201,25 +219,54 @@ public class GameExtractor
             // Delete existing file if present
             if (File.Exists(outputPath))
             {
+                Console.WriteLine($"[LOVE] Deleting existing: {outputPath}");
                 File.Delete(outputPath);
             }
 
+            Console.WriteLine($"[LOVE] Creating ZIP with FastZip...");
             ReportProgress("Creating game.love from extracted content...");
 
             var fastZip = new FastZip();
             fastZip.CreateZip(outputPath, sourceDir, true, null);
 
+            Console.WriteLine($"[LOVE] ZIP creation complete");
+            Console.WriteLine($"[LOVE] Output exists: {File.Exists(outputPath)}");
+
             if (File.Exists(outputPath))
             {
                 var fileInfo = new FileInfo(outputPath);
+                Console.WriteLine($"[LOVE] game.love size: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
                 ReportProgress($"Created game.love: {fileInfo.Length / 1024.0 / 1024.0:F2} MB");
+                
+                // Verify the ZIP is valid by trying to list contents
+                try
+                {
+                    using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(outputPath);
+                    Console.WriteLine($"[LOVE] ZIP contains {zipFile.Count} entries");
+                    
+                    // Check for main.lua at root
+                    var mainEntry = zipFile.GetEntry("main.lua");
+                    Console.WriteLine($"[LOVE] main.lua in ZIP: {(mainEntry != null ? "YES" : "NO")}");
+                    if (mainEntry != null)
+                    {
+                        Console.WriteLine($"[LOVE] main.lua size in ZIP: {mainEntry.Size} bytes");
+                    }
+                }
+                catch (Exception zipEx)
+                {
+                    Console.WriteLine($"[LOVE] WARNING: Could not verify ZIP: {zipEx.Message}");
+                }
+                
                 return true;
             }
 
+            Console.WriteLine($"[LOVE] ERROR: game.love was not created!");
             return false;
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[LOVE] ERROR: {ex.Message}");
+            Console.WriteLine($"[LOVE] Stack: {ex.StackTrace}");
             ReportProgress($"Failed to create game.love: {ex.Message}");
             return false;
         }

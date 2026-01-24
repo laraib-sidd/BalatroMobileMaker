@@ -158,7 +158,7 @@ public class BuildService : IBuildService
                 Console.WriteLine("║  This mod is REQUIRED for mods to work on mobile.            ║");
                 Console.WriteLine("║                                                              ║");
                 Console.WriteLine("║  Download from:                                              ║");
-                Console.WriteLine("║  https://github.com/MathIsFun0/BalatroMobileCompat           ║");
+                Console.WriteLine("║  https://github.com/eeve-lyn/BalatroMobileCompat             ║");
                 Console.WriteLine("║                                                              ║");
                 Console.WriteLine("║  Install to your Mods folder:                                ║");
                 Console.WriteLine($"║  {modsPath,-60} ║");
@@ -168,7 +168,7 @@ public class BuildService : IBuildService
                 Console.WriteLine();
                 
                 errors.Add("BalatroMobileCompat not found - REQUIRED for mobile mods");
-                errors.Add($"Download from: https://github.com/MathIsFun0/BalatroMobileCompat");
+                errors.Add($"Download from: https://github.com/eeve-lyn/BalatroMobileCompat");
                 errors.Add($"Install to: {mobileCompatPath}");
                 return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
             }
@@ -282,75 +282,182 @@ public class BuildService : IBuildService
             Console.WriteLine($"Decompiled to: {decompiledPath}");
 
             // Step 3: Copy game.love to assets
-            Console.WriteLine("Adding game.love to APK assets...");
+            Console.WriteLine("=== STEP 3: Adding game.love to APK assets ===");
             var assetsPath = Path.Combine(decompiledPath, "assets");
+            Console.WriteLine($"[BUILD] Assets path: {assetsPath}");
+            Console.WriteLine($"[BUILD] Assets folder exists before: {Directory.Exists(assetsPath)}");
+            
             Directory.CreateDirectory(assetsPath);
+            Console.WriteLine($"[BUILD] Assets folder exists after create: {Directory.Exists(assetsPath)}");
+            
             var targetGameLovePath = Path.Combine(assetsPath, "game.love");
+            Console.WriteLine($"[BUILD] Source game.love: {gameLovePath}");
+            Console.WriteLine($"[BUILD] Source exists: {File.Exists(gameLovePath)}");
             
             if (File.Exists(gameLovePath))
             {
+                var sourceLoveInfo = new FileInfo(gameLovePath);
+                Console.WriteLine($"[BUILD] Source game.love size: {sourceLoveInfo.Length / 1024.0 / 1024.0:F2} MB");
+                
                 File.Copy(gameLovePath, targetGameLovePath, true);
-                var loveSizeAfterCopy = new FileInfo(targetGameLovePath).Length;
-                Console.WriteLine($"Copied game.love: {loveSizeAfterCopy / 1024.0 / 1024.0:F2} MB");
+                
+                Console.WriteLine($"[BUILD] Target game.love: {targetGameLovePath}");
+                Console.WriteLine($"[BUILD] Target exists after copy: {File.Exists(targetGameLovePath)}");
+                
+                if (File.Exists(targetGameLovePath))
+                {
+                    var targetLoveInfo = new FileInfo(targetGameLovePath);
+                    Console.WriteLine($"[BUILD] Target game.love size: {targetLoveInfo.Length / 1024.0 / 1024.0:F2} MB");
+                    
+                    if (sourceLoveInfo.Length != targetLoveInfo.Length)
+                    {
+                        Console.WriteLine($"[BUILD] WARNING: Size mismatch! Source={sourceLoveInfo.Length}, Target={targetLoveInfo.Length}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[BUILD] Size verified OK");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[BUILD] ERROR: Copy failed - target file not created!");
+                    return null;
+                }
             }
             else
             {
-                Console.WriteLine($"ERROR: game.love not found at: {gameLovePath}");
+                Console.WriteLine($"[BUILD] ERROR: game.love not found at: {gameLovePath}");
                 return null;
+            }
+            
+            // List all files in assets folder
+            Console.WriteLine($"[BUILD] Assets folder contents:");
+            foreach (var f in Directory.GetFiles(assetsPath))
+            {
+                var info = new FileInfo(f);
+                Console.WriteLine($"[BUILD]   - {Path.GetFileName(f)}: {info.Length / 1024.0 / 1024.0:F2} MB");
             }
 
             // Step 4: Apply Balatro APK patches if available
+            Console.WriteLine("=== STEP 4: Applying Balatro APK patches ===");
             if (!string.IsNullOrEmpty(_balatroApkPatchPath) && Directory.Exists(_balatroApkPatchPath))
             {
-                Console.WriteLine("Applying Balatro APK patches...");
+                Console.WriteLine($"[BUILD] Patch source: {_balatroApkPatchPath}");
                 await ApplyBalatroApkPatchesAsync(decompiledPath);
             }
+            else
+            {
+                Console.WriteLine($"[BUILD] No Balatro APK patches to apply");
+            }
 
-            // Note: Mods are NOT injected into APK - they must be transferred via ADB after installation
-            // Use 'BalatroMobile mods' command to transfer mods to device
+            // Verify game.love still exists after patching
+            Console.WriteLine($"[BUILD] Verifying game.love after patches...");
+            Console.WriteLine($"[BUILD] game.love exists: {File.Exists(targetGameLovePath)}");
+            if (File.Exists(targetGameLovePath))
+            {
+                var verifyInfo = new FileInfo(targetGameLovePath);
+                Console.WriteLine($"[BUILD] game.love size: {verifyInfo.Length / 1024.0 / 1024.0:F2} MB");
+            }
 
             // Step 5: Apply AndroidManifest patches
-            Console.WriteLine("Patching AndroidManifest...");
+            Console.WriteLine("=== STEP 5: Patching AndroidManifest ===");
             await ApplyAndroidManifestPatchesAsync(decompiledPath);
 
+            // Final verification before compile
+            Console.WriteLine("=== PRE-COMPILE VERIFICATION ===");
+            Console.WriteLine($"[BUILD] Decompiled path: {decompiledPath}");
+            Console.WriteLine($"[BUILD] Decompiled exists: {Directory.Exists(decompiledPath)}");
+            Console.WriteLine($"[BUILD] Assets folder: {assetsPath}");
+            Console.WriteLine($"[BUILD] Assets exists: {Directory.Exists(assetsPath)}");
+            Console.WriteLine($"[BUILD] game.love path: {targetGameLovePath}");
+            Console.WriteLine($"[BUILD] game.love exists: {File.Exists(targetGameLovePath)}");
+            if (File.Exists(targetGameLovePath))
+            {
+                var finalInfo = new FileInfo(targetGameLovePath);
+                Console.WriteLine($"[BUILD] game.love final size: {finalInfo.Length / 1024.0 / 1024.0:F2} MB");
+            }
+            else
+            {
+                Console.WriteLine($"[BUILD] CRITICAL ERROR: game.love is missing before compile!");
+                return null;
+            }
+
             // Step 6: Recompile APK
-            Console.WriteLine("Recompiling APK...");
+            Console.WriteLine("=== STEP 6: Recompiling APK ===");
             var unsignedApkPath = Path.Combine(tempDir, "unsigned.apk");
+            Console.WriteLine($"[BUILD] Unsigned APK path: {unsignedApkPath}");
+            
             var recompileSuccess = await _apkTool.CompileAsync(decompiledPath, unsignedApkPath);
             if (!recompileSuccess)
             {
-                Console.WriteLine("ERROR: Failed to recompile APK");
+                Console.WriteLine("[BUILD] ERROR: Failed to recompile APK");
                 return null;
             }
-            Console.WriteLine($"Recompiled APK: {new FileInfo(unsignedApkPath).Length / 1024.0 / 1024.0:F2} MB");
+            
+            if (File.Exists(unsignedApkPath))
+            {
+                var unsignedInfo = new FileInfo(unsignedApkPath);
+                Console.WriteLine($"[BUILD] Recompiled APK: {unsignedInfo.Length / 1024.0 / 1024.0:F2} MB");
+            }
+            else
+            {
+                Console.WriteLine("[BUILD] ERROR: Unsigned APK was not created!");
+                return null;
+            }
 
             // Step 7: Sign APK
-            Console.WriteLine("Signing APK...");
+            Console.WriteLine("=== STEP 7: Signing APK ===");
             var signSuccess = await _apkTool.SignAsync(unsignedApkPath);
             
             // Look for signed APK (uber-apk-signer creates a new file)
             // uber-apk-signer naming: {input}-aligned-debugSigned.apk
             // Input: unsigned.apk -> Output: unsigned-aligned-debugSigned.apk
             var signedApkPath = Path.Combine(tempDir, "unsigned-aligned-debugSigned.apk");
+            Console.WriteLine($"[BUILD] Looking for signed APK: {signedApkPath}");
+            Console.WriteLine($"[BUILD] Exists: {File.Exists(signedApkPath)}");
+            
             if (!File.Exists(signedApkPath))
             {
                 // Try alternative naming patterns
                 signedApkPath = Path.Combine(tempDir, "unsigned-debugSigned.apk");
+                Console.WriteLine($"[BUILD] Trying alternative: {signedApkPath}");
+                Console.WriteLine($"[BUILD] Exists: {File.Exists(signedApkPath)}");
             }
             if (!File.Exists(signedApkPath))
             {
-                // Use unsigned APK if signing failed - THIS WILL NOT INSTALL ON ANDROID!
+                // List all APK files in temp directory
+                Console.WriteLine($"[BUILD] All APK files in {tempDir}:");
+                foreach (var f in Directory.GetFiles(tempDir, "*.apk"))
+                {
+                    Console.WriteLine($"[BUILD]   - {Path.GetFileName(f)}");
+                }
+                
+                // Use unsigned APK if signing failed
                 signedApkPath = unsignedApkPath;
-                Console.WriteLine("ERROR: Signed APK not found! Using unsigned APK (will NOT install on Android)");
+                Console.WriteLine("[BUILD] WARNING: Signed APK not found! Using unsigned APK");
             }
             else
             {
-                Console.WriteLine($"Using signed APK: {Path.GetFileName(signedApkPath)}");
+                var signedInfo = new FileInfo(signedApkPath);
+                Console.WriteLine($"[BUILD] Using signed APK: {Path.GetFileName(signedApkPath)} ({signedInfo.Length / 1024.0 / 1024.0:F2} MB)");
             }
 
             // Copy to final output location
+            Console.WriteLine("=== STEP 8: Copying to output ===");
+            Console.WriteLine($"[BUILD] Source: {signedApkPath}");
+            Console.WriteLine($"[BUILD] Target: {outputPath}");
             File.Copy(signedApkPath, outputPath, true);
-            Console.WriteLine($"Final APK: {outputPath} ({new FileInfo(outputPath).Length / 1024.0 / 1024.0:F2} MB)");
+            
+            if (File.Exists(outputPath))
+            {
+                var finalInfo = new FileInfo(outputPath);
+                Console.WriteLine($"[BUILD] Final APK: {outputPath} ({finalInfo.Length / 1024.0 / 1024.0:F2} MB)");
+            }
+            else
+            {
+                Console.WriteLine("[BUILD] ERROR: Final APK copy failed!");
+                return null;
+            }
 
             return File.Exists(outputPath) ? outputPath : null;
         }
@@ -604,53 +711,86 @@ public class BuildService : IBuildService
     {
         try
         {
+            Console.WriteLine("=== BUNDLE LOVELY DUMP ===");
+            Console.WriteLine($"[BUNDLE] Extract path: {extractPath}");
+            Console.WriteLine($"[BUNDLE] Extract path exists: {Directory.Exists(extractPath)}");
+            
             // Find Balatro AppData with Lovely dump
             var balatroAppData = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "Balatro"
             );
             
+            Console.WriteLine($"[BUNDLE] Balatro AppData: {balatroAppData}");
+            Console.WriteLine($"[BUNDLE] AppData exists: {Directory.Exists(balatroAppData)}");
+            
             var modsPath = Path.Combine(balatroAppData, "Mods");
             var lovelyDumpPath = Path.Combine(modsPath, "lovely", "dump");
             
+            Console.WriteLine($"[BUNDLE] Mods path: {modsPath}");
+            Console.WriteLine($"[BUNDLE] Mods exists: {Directory.Exists(modsPath)}");
+            Console.WriteLine($"[BUNDLE] Lovely dump path: {lovelyDumpPath}");
+            Console.WriteLine($"[BUNDLE] Lovely dump exists: {Directory.Exists(lovelyDumpPath)}");
+            
             if (!Directory.Exists(lovelyDumpPath))
             {
-                Console.WriteLine($"  Lovely dump not found at: {lovelyDumpPath}");
+                Console.WriteLine($"[BUNDLE] ERROR: Lovely dump not found at: {lovelyDumpPath}");
                 return false;
             }
             
-            Console.WriteLine($"  Found Lovely dump at: {lovelyDumpPath}");
+            // List lovely dump contents
+            Console.WriteLine($"[BUNDLE] Lovely dump contents:");
+            foreach (var item in Directory.GetFileSystemEntries(lovelyDumpPath))
+            {
+                var isDir = Directory.Exists(item);
+                Console.WriteLine($"[BUNDLE]   - {Path.GetFileName(item)} {(isDir ? "(DIR)" : "")}");
+            }
             
             // 1. Copy Lovely dump files (overlaying extracted Balatro)
+            Console.WriteLine($"[BUNDLE] Step 1: Copying Lovely dump files...");
+            int filesCopied = 0;
+            int dirsCopied = 0;
             foreach (var item in Directory.GetFileSystemEntries(lovelyDumpPath))
             {
                 var destPath = Path.Combine(extractPath, Path.GetFileName(item));
                 if (Directory.Exists(item))
                 {
                     await CopyDirectoryAsync(item, destPath);
+                    dirsCopied++;
                 }
                 else
                 {
                     File.Copy(item, destPath, true);
+                    filesCopied++;
                 }
             }
+            Console.WriteLine($"[BUNDLE] Copied {filesCopied} files, {dirsCopied} directories");
             messages.Add("Overlaid Lovely dump files");
             
             // 2. Create SMODS folder with version.lua and release.lua
+            Console.WriteLine($"[BUNDLE] Step 2: Creating SMODS folder...");
             var smodsLibPath = Path.Combine(modsPath, "smods");
             var smodsDestPath = Path.Combine(extractPath, "SMODS");
+            Console.WriteLine($"[BUNDLE] SMODS source: {smodsLibPath}");
+            Console.WriteLine($"[BUNDLE] SMODS source exists: {Directory.Exists(smodsLibPath)}");
+            
             Directory.CreateDirectory(smodsDestPath);
+            Console.WriteLine($"[BUNDLE] SMODS dest created: {smodsDestPath}");
             
             var versionLuaPath = Path.Combine(smodsLibPath, "version.lua");
+            Console.WriteLine($"[BUNDLE] version.lua exists: {File.Exists(versionLuaPath)}");
             if (File.Exists(versionLuaPath))
             {
                 File.Copy(versionLuaPath, Path.Combine(smodsDestPath, "version.lua"), true);
+                Console.WriteLine($"[BUNDLE] Copied version.lua");
             }
             
             var releaseLuaPath = Path.Combine(smodsLibPath, "release.lua");
+            Console.WriteLine($"[BUNDLE] release.lua exists: {File.Exists(releaseLuaPath)}");
             if (File.Exists(releaseLuaPath))
             {
                 File.Copy(releaseLuaPath, Path.Combine(smodsDestPath, "release.lua"), true);
+                Console.WriteLine($"[BUNDLE] Copied release.lua");
             }
             
             // 3. Create nativefs stub (replaces FFI version that doesn't work on Android)
@@ -709,13 +849,16 @@ function nfs.newFileData(a1, a2)
 end
 return nfs";
             
-            // Create nativefs.lua at root and nativefs/init.lua
+            // 3. Create nativefs.lua at root and nativefs/init.lua
+            Console.WriteLine($"[BUNDLE] Step 3: Creating nativefs stubs...");
             var nativefsDir = Path.Combine(extractPath, "nativefs");
             Directory.CreateDirectory(nativefsDir);
             await File.WriteAllTextAsync(Path.Combine(nativefsDir, "init.lua"), nativefsStub);
             await File.WriteAllTextAsync(Path.Combine(extractPath, "nativefs.lua"), nativefsStub);
+            Console.WriteLine($"[BUNDLE] Created nativefs/init.lua and nativefs.lua");
             
             // 4. Create lovely stub
+            Console.WriteLine($"[BUNDLE] Step 4: Creating lovely stub...");
             var lovelyStub = @"local lovely = {}
 lovely.mod_dir = 'Mods'
 lovely.path = 'Mods'
@@ -725,18 +868,43 @@ return lovely";
             var lovelyDir = Path.Combine(extractPath, "lovely");
             Directory.CreateDirectory(lovelyDir);
             await File.WriteAllTextAsync(Path.Combine(lovelyDir, "init.lua"), lovelyStub);
+            Console.WriteLine($"[BUNDLE] Created lovely/init.lua");
             
             // 5. Copy json.lua from smods
+            Console.WriteLine($"[BUNDLE] Step 5: Copying json.lua...");
             var jsonLuaPath = Path.Combine(smodsLibPath, "libs", "json", "json.lua");
+            Console.WriteLine($"[BUNDLE] json.lua source: {jsonLuaPath}");
+            Console.WriteLine($"[BUNDLE] json.lua exists: {File.Exists(jsonLuaPath)}");
             if (File.Exists(jsonLuaPath))
             {
                 File.Copy(jsonLuaPath, Path.Combine(extractPath, "json.lua"), true);
+                Console.WriteLine($"[BUNDLE] Copied json.lua");
+            }
+            else
+            {
+                Console.WriteLine($"[BUNDLE] WARNING: json.lua not found!");
             }
             
             // 6. Clean macOS metadata files
+            Console.WriteLine($"[BUNDLE] Step 6: Cleaning macOS metadata...");
             await CleanMacOsMetadataAsync(extractPath);
             
-            Console.WriteLine("  Bundled mod loader components successfully");
+            // Final verification - list key files
+            Console.WriteLine($"[BUNDLE] Final verification - Key files in extract path:");
+            var keyFiles = new[] { "main.lua", "conf.lua", "nativefs.lua", "json.lua" };
+            foreach (var kf in keyFiles)
+            {
+                var path = Path.Combine(extractPath, kf);
+                Console.WriteLine($"[BUNDLE]   - {kf}: {(File.Exists(path) ? "EXISTS" : "MISSING")}");
+            }
+            var keyDirs = new[] { "nativefs", "lovely", "SMODS", "engine", "functions" };
+            foreach (var kd in keyDirs)
+            {
+                var path = Path.Combine(extractPath, kd);
+                Console.WriteLine($"[BUNDLE]   - {kd}/: {(Directory.Exists(path) ? "EXISTS" : "MISSING")}");
+            }
+            
+            Console.WriteLine("[BUNDLE] Bundled mod loader components successfully");
             return true;
         }
         catch (Exception ex)

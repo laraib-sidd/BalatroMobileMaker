@@ -840,7 +840,7 @@ public class BuildService : IBuildService
             }
             
             // 3. Create nativefs stub (replaces FFI version that doesn't work on Android)
-            var nativefsStub = @"-- NativeFS stub for Android - WORKING VERSION
+            var nativefsStub = @"-- NativeFS stub for Android - ROBUST VERSION
 local nfs = {}
 local lf = love.filesystem
 local _workingDir = ''
@@ -860,7 +860,14 @@ function nfs.read(arg1, arg2, arg3)
     end
     return contents, bytes
 end
-function nfs.load(path) return lf.load(path) end
+-- CRITICAL: Return a safe no-op function if file doesn't exist
+-- This prevents crashes when mods call nativefs.load(path)() before mods are transferred
+function nfs.load(path)
+    local chunk, err = lf.load(path)
+    if chunk then return chunk end
+    -- Return a function that returns nil - prevents crash on nfs.load(path)()
+    return function() return nil end, err
+end
 function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
 function nfs.getDirectoryItemsInfo(dir, ft)
     local items = nfs.getDirectoryItems(dir)

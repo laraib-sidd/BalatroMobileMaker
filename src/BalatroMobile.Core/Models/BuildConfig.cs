@@ -12,7 +12,7 @@ public record BuildConfig
     public string OutputPath { get; init; } = "balatro.apk";
     
     // Note: Mods cannot be injected into APK during build.
-    // Use 'BalatroMobile mods' command to transfer mods via ADB after APK installation.
+    // Mods must be transferred via ADB or manually copied after APK installation.
 }
 
 public enum Platform

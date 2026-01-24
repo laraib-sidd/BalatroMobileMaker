@@ -260,7 +260,7 @@ public class BuildService : IBuildService
             }
 
             // Note: Mods are NOT injected into APK - they must be transferred via ADB after installation
-            // Use 'BalatroMobile mods' command to transfer mods to device
+            // The interactive mode handles this automatically after the build completes
 
             // Step 5: Apply AndroidManifest patches
             Console.WriteLine("Patching AndroidManifest...");

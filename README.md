@@ -226,7 +226,30 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - ✅ Restart Run Button
 - ✅ Brainstorm Reroll Button
 
-### Required Files for Modding
+### Quick Start with Helper Scripts (Windows)
+
+We provide PowerShell scripts to automate the mod preparation and transfer process:
+
+```powershell
+# Step 1: Build APK using BalatroMobile.exe
+.\BalatroMobile.exe build
+
+# Step 2: Prepare mod package (creates stubs, copies files)
+.\scripts\prepare-mods.ps1
+
+# Step 3: Install APK on device and launch once
+adb install balatro.apk
+# Launch app manually on device, then close it
+
+# Step 4: Transfer mods to device
+.\scripts\transfer-mods.ps1
+```
+
+That's it! Launch Balatro on your device and enjoy mods.
+
+### Manual Method (All Platforms)
+
+#### Required Files for Modding
 
 After building and installing the APK, transfer these files to your device:
 
@@ -238,12 +261,12 @@ After building and installing the APK, transfer these files to your device:
 │   ├── Talisman/
 │   └── ...
 ├── [Lovely dump files]        # From Mods/lovely/dump/
-├── nativefs/init.lua          # Stub file
-├── lovely/init.lua            # Stub file
+├── nativefs/init.lua          # Stub file (see CHANGELOG.md)
+├── lovely/init.lua            # Stub file (see CHANGELOG.md)
 └── lovely.lua                 # Config file
 ```
 
-### Transfer via ADB
+#### Transfer via ADB
 
 ```bash
 # Create tar archive of mod files
@@ -264,8 +287,9 @@ adb shell "run-as com.unofficial.balatro find /data/data/com.unofficial.balatro/
 - **macOS users**: Always remove `._*` files before transfer (they cause Lua syntax errors)
 - **Android 11+**: Use `run-as` method shown above (direct push to app data is blocked)
 - **First launch**: Install APK and launch once before transferring mods (creates directories)
+- **BalatroMobileCompat**: This mod is **required** - it re-applies mobile patches that Lovely overwrites
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed technical documentation.
+See [CHANGELOG.md](CHANGELOG.md) for detailed technical documentation and stub implementations.
 
 ---
 

@@ -9,6 +9,9 @@ namespace BalatroMobile.Cli;
 
 internal class Program
 {
+    // Version string - update this when releasing new versions
+    private const string Version = "1.0.6";
+    
     private static async Task Main(string[] args)
     {
         try
@@ -17,6 +20,11 @@ internal class Program
             {
                 // Interactive mode when no arguments provided
                 await RunInteractiveMode();
+                return;
+            }
+            else if (args[0] == "--version" || args[0] == "-v")
+            {
+                Console.WriteLine($"BalatroMobile v{Version}");
                 return;
             }
             else if (args[0] == "check")
@@ -590,9 +598,9 @@ internal class Program
 
     private static async Task RunInteractiveMode()
     {
-        Console.WriteLine("=====================================");
-        Console.WriteLine("    BalatroMobile Interactive Mode");
-        Console.WriteLine("=====================================");
+        Console.WriteLine("=========================================");
+        Console.WriteLine($"    BalatroMobile v{Version} - Interactive Mode");
+        Console.WriteLine("=========================================");
         Console.WriteLine();
 
         // Check if Balatro.exe is in the current directory

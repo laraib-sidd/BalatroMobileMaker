@@ -50,7 +50,13 @@ function nfs.read(arg1, arg2, arg3)
     return contents, bytes
 end
 
-function nfs.load(path) return lf.load(path) end
+-- CRITICAL: Return a safe no-op function if file doesn't exist
+-- This prevents crashes when mods call nativefs.load(path)() before mods are transferred
+function nfs.load(path)
+    local chunk, err = lf.load(path)
+    if chunk then return chunk end
+    return function() return nil end, err
+end
 function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
 
 function nfs.getDirectoryItemsInfo(dir, filtertype)

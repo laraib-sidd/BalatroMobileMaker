@@ -8,7 +8,6 @@ public class BuildService : IBuildService
 {
     private readonly IGameDetector _gameDetector;
     private readonly IPatchService _patchService;
-    private readonly IModInjectionService _modInjectionService;
     private readonly IApkTool _apkTool;
     private readonly IJavaTool _javaTool;
     private readonly string? _love2dApkPath;
@@ -18,7 +17,6 @@ public class BuildService : IBuildService
     public BuildService(
         IGameDetector gameDetector,
         IPatchService patchService,
-        IModInjectionService modInjectionService,
         IApkTool apkTool,
         IJavaTool javaTool,
         string? love2dApkPath = null,
@@ -26,7 +24,6 @@ public class BuildService : IBuildService
     {
         _gameDetector = gameDetector;
         _patchService = patchService;
-        _modInjectionService = modInjectionService;
         _apkTool = apkTool;
         _javaTool = javaTool;
         _love2dApkPath = love2dApkPath;
@@ -262,18 +259,14 @@ public class BuildService : IBuildService
                 await ApplyBalatroApkPatchesAsync(decompiledPath);
             }
 
-            // Step 5: Inject mods if requested
-            if (config.InjectMods)
-            {
-                Console.WriteLine("Injecting mods...");
-                await InjectModsIntoApkAsync(config, decompiledPath);
-            }
+            // Note: Mods are NOT injected into APK - they must be transferred via ADB after installation
+            // Use 'BalatroMobile mods' command to transfer mods to device
 
-            // Step 6: Apply AndroidManifest patches
+            // Step 5: Apply AndroidManifest patches
             Console.WriteLine("Patching AndroidManifest...");
             await ApplyAndroidManifestPatchesAsync(decompiledPath);
 
-            // Step 7: Recompile APK
+            // Step 6: Recompile APK
             Console.WriteLine("Recompiling APK...");
             var unsignedApkPath = Path.Combine(tempDir, "unsigned.apk");
             var recompileSuccess = await _apkTool.CompileAsync(decompiledPath, unsignedApkPath);
@@ -284,7 +277,7 @@ public class BuildService : IBuildService
             }
             Console.WriteLine($"Recompiled APK: {new FileInfo(unsignedApkPath).Length / 1024.0 / 1024.0:F2} MB");
 
-            // Step 8: Sign APK
+            // Step 7: Sign APK
             Console.WriteLine("Signing APK...");
             var signSuccess = await _apkTool.SignAsync(unsignedApkPath);
             
@@ -362,39 +355,6 @@ public class BuildService : IBuildService
         catch (Exception ex)
         {
             Console.WriteLine($"Warning: Failed to apply Balatro APK patches: {ex.Message}");
-        }
-    }
-
-    private async Task InjectModsIntoApkAsync(BuildConfig config, string decompiledApkPath)
-    {
-        // Create the Android app data directory structure in the APK
-        var appDataPath = Path.Combine(decompiledApkPath, "assets", "files", "save", "game");
-        Directory.CreateDirectory(appDataPath);
-
-        // Configure mod injection for APK structure
-        var modConfig = new ModInjectionConfig
-        {
-            SourceModsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Balatro", "Mods"),
-            TargetModsPath = appDataPath,
-            IncludeLovelyDump = true,
-            IncludeSMODS = true,
-            IncludeLibraries = true,
-            CreateLovelyConfig = true,
-            ExcludedMods = new[] { "BrainstormRerollButton" } // Exclude problematic mods
-        };
-
-        // Inject mods into the APK structure
-        var result = await _modInjectionService.InjectModsAsync(modConfig);
-        
-        if (result.Success)
-        {
-            Console.WriteLine($"Injected {result.InjectedComponents.Count()} mod components ({result.BytesCopied / 1024.0 / 1024.0:F2} MB)");
-        }
-        else
-        {
-            Console.WriteLine($"Warning: Mod injection had errors: {string.Join(", ", result.Errors)}");
         }
     }
 

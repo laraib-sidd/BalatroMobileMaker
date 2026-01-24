@@ -8,9 +8,11 @@ public record BuildConfig
     public bool EnableHighDpi { get; init; } = false;
     public bool DisableCrtShader { get; init; } = false;
     public bool EnableExternalStorage { get; init; } = false;
-    public bool InjectMods { get; init; } = false; // Whether to inject mods during build
     public string? CustomFpsValue { get; init; }
     public string OutputPath { get; init; } = "balatro.apk";
+    
+    // Note: Mods cannot be injected into APK during build.
+    // Use 'BalatroMobile mods' command to transfer mods via ADB after APK installation.
 }
 
 public enum Platform

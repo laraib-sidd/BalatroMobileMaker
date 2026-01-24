@@ -20,6 +20,13 @@ public class ToolsManager
     private const string LOVE2D_VERSION = "11.5";
     private const string OPENJDK_VERSION = "21.0.5";
     private const string OPENJDK_BUILD = "11";
+    
+    // Platform tools (ADB) - Google's official download URLs
+    private static readonly string PLATFORM_TOOLS_URL = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        ? "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+            ? "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+            : "https://dl.google.com/android/repository/platform-tools-latest-linux.zip";
 
     // Download URLs - VERIFIED WORKING URLs
     // APKTool: Using Bitbucket (official source) since GitHub doesn't host the jar directly
@@ -46,6 +53,11 @@ public class ToolsManager
     public string UberApkSignerPath => Path.Combine(_toolsDirectory, "uber-apk-signer.jar");
     public string Love2dApkPath => Path.Combine(_toolsDirectory, "love-android-embed.apk");
     public string BalatroApkPatchPath => Path.Combine(_toolsDirectory, "Balatro-APK-Patch");
+    
+    // ADB path - platform-specific executable name
+    public string AdbPath => RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        ? Path.Combine(_toolsDirectory, "platform-tools", "adb.exe")
+        : Path.Combine(_toolsDirectory, "platform-tools", "adb");
 
     public ToolsManager(Action<string>? progressCallback = null)
     {
@@ -74,7 +86,8 @@ public class ToolsManager
                 EnsureApkToolAsync(),
                 EnsureUberApkSignerAsync(),
                 EnsureLove2dApkAsync(),
-                EnsureBalatroApkPatchAsync()
+                EnsureBalatroApkPatchAsync(),
+                EnsureAdbAsync()
             };
 
             var results = await Task.WhenAll(tasks);
@@ -88,6 +101,137 @@ public class ToolsManager
     }
 
     /// <summary>
+    /// Ensures ADB (platform-tools) is available, downloading if necessary.
+    /// </summary>
+    public async Task<bool> EnsureAdbAsync()
+    {
+        // Check if bundled ADB exists and works
+        if (IsAdbAvailable())
+        {
+            ReportProgress("ADB: Available");
+            return true;
+        }
+
+        ReportProgress("Downloading Android Platform Tools (ADB)...");
+        
+        var platformToolsZip = Path.Combine(_toolsDirectory, "platform-tools.zip");
+        var platformToolsPath = Path.Combine(_toolsDirectory, "platform-tools");
+        
+        try
+        {
+            // Download platform-tools
+            await DownloadFileAsync(PLATFORM_TOOLS_URL, platformToolsZip);
+            
+            // Extract
+            ReportProgress("Extracting ADB...");
+            if (Directory.Exists(platformToolsPath))
+            {
+                Directory.Delete(platformToolsPath, true);
+            }
+            ZipFile.ExtractToDirectory(platformToolsZip, _toolsDirectory);
+            
+            // Cleanup zip
+            File.Delete(platformToolsZip);
+            
+            // On macOS/Linux, make adb executable
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                try
+                {
+                    var chmod = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "chmod",
+                        Arguments = $"+x \"{AdbPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                    chmod?.WaitForExit(5000);
+                }
+                catch { }
+            }
+            
+            ReportProgress("ADB: Downloaded and ready");
+            return File.Exists(AdbPath);
+        }
+        catch (Exception ex)
+        {
+            ReportProgress($"Failed to download ADB: {ex.Message}");
+            
+            // Cleanup on failure
+            try
+            {
+                if (File.Exists(platformToolsZip)) File.Delete(platformToolsZip);
+            }
+            catch { }
+            
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Checks if ADB is available (bundled or system).
+    /// </summary>
+    public bool IsAdbAvailable()
+    {
+        // Check bundled ADB first
+        if (File.Exists(AdbPath))
+        {
+            try
+            {
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = AdbPath,
+                    Arguments = "version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+                
+                process?.WaitForExit(5000);
+                return process?.ExitCode == 0;
+            }
+            catch
+            {
+                // Bundled ADB exists but can't run
+            }
+        }
+        
+        // Check system ADB
+        try
+        {
+            var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "adb",
+                Arguments = "version",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+            
+            process?.WaitForExit(5000);
+            return process?.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the ADB executable path - uses bundled if available, otherwise system.
+    /// </summary>
+    public string GetAdbExecutablePath()
+    {
+        if (File.Exists(AdbPath))
+        {
+            return AdbPath;
+        }
+        return "adb";
+    }
+
+    /// <summary>
     /// Checks if all tools are already available (no download needed).
     /// </summary>
     public bool AreToolsAvailable()
@@ -96,7 +240,8 @@ public class ToolsManager
                File.Exists(ApkToolPath) && 
                File.Exists(UberApkSignerPath) && 
                File.Exists(Love2dApkPath) &&
-               Directory.Exists(BalatroApkPatchPath);
+               Directory.Exists(BalatroApkPatchPath) &&
+               IsAdbAvailable();
     }
 
     /// <summary>

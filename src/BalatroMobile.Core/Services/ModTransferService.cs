@@ -10,57 +10,114 @@ namespace BalatroMobile.Core.Services;
 public class ModTransferService
 {
     private readonly Action<string>? _progressCallback;
+    private readonly string? _adbPath;
     
     // Stub content for nativefs (Android-compatible wrapper for love.filesystem)
-    private const string NativefsStub = @"-- NativeFS stub for Android
--- Wraps love.filesystem for compatibility
+    // CRITICAL: This stub handles all nativefs API signatures including:
+    // - read(path), read(mode, path), read(mode, path, size)
+    // - When mode='data', returns FileData not string
+    // - newFileData(path) and newFileData(contents, name)
+    private const string NativefsStub = @"-- NativeFS stub for Android - WORKING VERSION
+-- Handles all nativefs API signatures for SMODS compatibility
 local nfs = {}
 local lf = love.filesystem
 local _workingDir = """"
 
-function nfs.read(path) return lf.read(path) end
-function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
-function nfs.getInfo(path) return lf.getInfo(path) end
-function nfs.setWorkingDirectory(dir) _workingDir = dir or """"; return true end
-function nfs.getWorkingDirectory()
-    if _workingDir == """" then return lf.getSaveDirectory() end
-    return _workingDir
+-- read: handles nativefs.read(path), nativefs.read(mode, path), nativefs.read(mode, path, size)
+-- mode can be 'string' (default) or 'data' (returns FileData)
+function nfs.read(arg1, arg2, arg3)
+    local container, name, size
+    if arg3 ~= nil then
+        container, name, size = arg1, arg2, arg3
+    elseif arg2 == nil then
+        container, name, size = 'string', arg1, 'all'
+    else
+        if type(arg2) == 'number' or arg2 == 'all' then
+            container, name, size = 'string', arg1, arg2
+        else
+            container, name, size = arg1, arg2, 'all'
+        end
+    end
+    
+    local contents, bytes = lf.read(name)
+    if not contents then return nil, 0 end
+    
+    if container == 'data' then
+        -- Return FileData instead of string (required for sound loading)
+        local filename = name:match('[^/]+$') or name
+        return lf.newFileData(contents, filename), bytes
+    end
+    return contents, bytes
 end
-function nfs.write(path, data) return lf.write(path, data) end
-function nfs.append(path, data) return lf.append(path, data) end
+
+function nfs.load(path) return lf.load(path) end
+function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
+
+function nfs.getDirectoryItemsInfo(dir, filtertype)
+    local items = nfs.getDirectoryItems(dir)
+    local result = {}
+    for _, item in ipairs(items) do
+        local itemPath = dir .. '/' .. item
+        local info = lf.getInfo(itemPath)
+        if info and (not filtertype or info.type == filtertype) then
+            info.name = item
+            table.insert(result, info)
+        end
+    end
+    return result
+end
+
+function nfs.getInfo(path) return lf.getInfo(path) end
+function nfs.setWorkingDirectory(dir) _workingDir = dir or ''; return true end
+function nfs.getWorkingDirectory() return _workingDir end
+function nfs.write(path, data, size) return lf.write(path, data, size) end
+function nfs.append(path, data, size) return lf.append(path, data, size) end
 function nfs.createDirectory(path) return lf.createDirectory(path) end
 function nfs.remove(path) return lf.remove(path) end
-function nfs.getRealDirectory(path) return lf.getRealDirectory(path) end
 function nfs.getSaveDirectory() return lf.getSaveDirectory() end
-function nfs.getSourceBaseDirectory() return lf.getSourceBaseDirectory and lf.getSourceBaseDirectory() or """" end
-function nfs.isFile(path)
-    local info = lf.getInfo(path)
-    return info and info.type == ""file""
-end
-function nfs.isDirectory(path)
-    local info = lf.getInfo(path)
-    return info and info.type == ""directory""
+function nfs.getSourceBaseDirectory() return '' end
+function nfs.isFile(path) local i = lf.getInfo(path); return i and i.type == 'file' end
+function nfs.isDirectory(path) local i = lf.getInfo(path); return i and i.type == 'directory' end
+function nfs.lines(path) return lf.lines(path) end
+function nfs.newFile(path, mode) return lf.newFile(path, mode) end
+
+-- newFileData: support both forms - (path) or (contents, name)
+function nfs.newFileData(arg1, arg2)
+    if arg2 then
+        -- Two args: contents, name
+        return lf.newFileData(arg1, arg2)
+    else
+        -- One arg: filepath - read and create FileData
+        local contents = lf.read(arg1)
+        if not contents then return nil end
+        local name = arg1:match('[^/]+$') or arg1
+        return lf.newFileData(contents, name)
+    end
 end
 
 return nfs";
 
     // Stub content for lovely module
+    // CRITICAL: Must include 'path' field for SMODS compatibility
     private const string LovelyStub = @"-- Lovely stub for mobile
 local lovely = {}
 lovely.mod_dir = ""Mods""
+lovely.path = ""Mods""  -- Required for SMODS.path to work
 lovely.version = ""0.6.0""
 return lovely";
 
     // Config file for lovely.lua
+    // NOTE: With t.identity = "Balatro" in conf.lua, save path is save/Balatro/
     private const string LovelyConfig = @"return {
     repo = ""https://github.com/ethangreen-dev/lovely-injector"",
     version = ""0.6.0"",
-    mod_dir = ""/data/data/com.unofficial.balatro/files/save/game/Mods"",
+    mod_dir = ""/data/data/com.unofficial.balatro/files/save/Balatro/Mods"",
 }";
 
-    public ModTransferService(Action<string>? progressCallback = null)
+    public ModTransferService(Action<string>? progressCallback = null, string? adbPath = null)
     {
         _progressCallback = progressCallback;
+        _adbPath = adbPath;
     }
 
     private void ReportProgress(string message)
@@ -108,6 +165,18 @@ return lovely";
             
             ReportProgress($"Found Balatro mods at: {modsPath}");
             ReportProgress($"Found Lovely dump at: {lovelyDumpPath}");
+            
+            // Check for BalatroMobileCompat - CRITICAL for mobile mod compatibility
+            var mobileCompatPath = Path.Combine(modsPath, "BalatroMobileCompat");
+            if (!Directory.Exists(mobileCompatPath))
+            {
+                result.Errors.Add("BalatroMobileCompat not found!");
+                result.Errors.Add("This mod is REQUIRED for mods to work on mobile.");
+                result.Errors.Add("Download from: https://github.com/MathIsFun0/BalatroMobileCompat");
+                result.Errors.Add($"Install to: {mobileCompatPath}");
+                return result;
+            }
+            ReportProgress("Found BalatroMobileCompat (required for mobile)");
             
             // Create output directory
             var gameDir = Path.Combine(outputDir, "game");
@@ -159,13 +228,34 @@ return lovely";
             result.Messages.Add("Created SMODS folder");
             
             // Step 4: Create nativefs stub
+            // CRITICAL: Create BOTH nativefs.lua and nativefs/init.lua because
+            // Lua's require searches for "nativefs.lua" BEFORE "nativefs/init.lua"
             ReportProgress("Creating nativefs stub...");
             var nativefsDir = Path.Combine(gameDir, "nativefs");
             Directory.CreateDirectory(nativefsDir);
             await File.WriteAllTextAsync(Path.Combine(nativefsDir, "init.lua"), NativefsStub);
-            result.Messages.Add("Created nativefs/init.lua stub");
+            await File.WriteAllTextAsync(Path.Combine(gameDir, "nativefs.lua"), NativefsStub);
+            result.Messages.Add("Created nativefs stubs");
+            
+            // Step 4b: Replace any FFI-based nativefs.lua files in mods
+            // These use LuaJIT FFI which doesn't work on Android
+            ReportProgress("Replacing FFI nativefs files in mods...");
+            var nativefsFilesToReplace = Directory.GetFiles(modsDestPath, "nativefs.lua", SearchOption.AllDirectories);
+            foreach (var nativefsFile in nativefsFilesToReplace)
+            {
+                try
+                {
+                    await File.WriteAllTextAsync(nativefsFile, NativefsStub);
+                    result.Messages.Add($"Replaced {Path.GetRelativePath(gameDir, nativefsFile)}");
+                }
+                catch (Exception ex)
+                {
+                    result.Messages.Add($"Warning: Could not replace {nativefsFile}: {ex.Message}");
+                }
+            }
             
             // Step 5: Create lovely stub
+            // CRITICAL: Create BOTH lovely.lua (config) and lovely/init.lua (module)
             ReportProgress("Creating lovely stub...");
             var lovelyDir = Path.Combine(gameDir, "lovely");
             Directory.CreateDirectory(lovelyDir);
@@ -203,21 +293,29 @@ return lovely";
         
         try
         {
-            // Check ADB is available
-            if (!await IsAdbAvailableAsync())
+            // Run ADB diagnostics
+            var diagResult = await RunAdbDiagnosticsAsync();
+            
+            if (!diagResult.AdbInstalled)
             {
-                result.Errors.Add("ADB not found. Please install Android SDK Platform Tools.");
+                result.Errors.Add("ADB not found. See instructions above.");
                 return result;
             }
             
-            // Check device is connected
-            if (!await IsDeviceConnectedAsync())
+            if (!diagResult.DeviceConnected)
             {
-                result.Errors.Add("No Android device connected. Please connect via USB and enable USB debugging.");
+                result.Errors.Add("No Android device detected. Follow the troubleshooting steps above.");
                 return result;
             }
             
-            ReportProgress("Android device connected");
+            if (!diagResult.DeviceAuthorized)
+            {
+                result.Errors.Add("Device not authorized. Check your phone for the authorization prompt.");
+                return result;
+            }
+            
+            Console.WriteLine();
+            ReportProgress("ADB connection verified");
             
             // Create tar archive
             ReportProgress("Creating transfer archive...");
@@ -246,8 +344,9 @@ return lovely";
             result.Messages.Add("Pushed archive to device");
             
             // Extract on device using run-as
+            // NOTE: With t.identity = "Balatro" in conf.lua, save path is save/Balatro/
             ReportProgress("Extracting on device...");
-            var targetPath = "/data/data/com.unofficial.balatro/files/save/game";
+            var targetPath = "/data/data/com.unofficial.balatro/files/save/Balatro";
             var extractCmd = $"run-as com.unofficial.balatro sh -c 'mkdir -p {targetPath} && cd {targetPath} && tar -xf /data/local/tmp/mod-transfer.tar'";
             var extractResult = await RunAdbAsync($"shell \"{extractCmd}\"");
             if (!extractResult.Success)
@@ -355,9 +454,217 @@ return lovely";
         return lines.Any(l => l.Contains("device") && !l.Contains("List of devices"));
     }
 
+    /// <summary>
+    /// Comprehensive ADB diagnostics with troubleshooting guidance.
+    /// </summary>
+    public async Task<AdbDiagnosticResult> RunAdbDiagnosticsAsync()
+    {
+        var result = new AdbDiagnosticResult();
+        
+        Console.WriteLine();
+        Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
+        Console.WriteLine("║              ADB CONNECTION DIAGNOSTICS                      ║");
+        Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
+        Console.WriteLine();
+
+        // Step 1: Check if ADB is installed
+        Console.WriteLine("▶ Checking ADB installation...");
+        var adbVersion = await RunProcessAsync("adb", "version");
+        if (!adbVersion.Success)
+        {
+            result.AdbInstalled = false;
+            Console.WriteLine("  ✗ ADB not found!");
+            Console.WriteLine();
+            Console.WriteLine("  ╔════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("  ║  HOW TO INSTALL ADB:                                       ║");
+            Console.WriteLine("  ╠════════════════════════════════════════════════════════════╣");
+            Console.WriteLine("  ║  Windows:                                                  ║");
+            Console.WriteLine("  ║    1. Download: platform-tools from developer.android.com ║");
+            Console.WriteLine("  ║    2. Extract to C:\\platform-tools                         ║");
+            Console.WriteLine("  ║    3. Add to PATH or run from that folder                  ║");
+            Console.WriteLine("  ║                                                            ║");
+            Console.WriteLine("  ║  macOS:                                                    ║");
+            Console.WriteLine("  ║    brew install android-platform-tools                     ║");
+            Console.WriteLine("  ║                                                            ║");
+            Console.WriteLine("  ║  Linux:                                                    ║");
+            Console.WriteLine("  ║    sudo apt install adb                                    ║");
+            Console.WriteLine("  ╚════════════════════════════════════════════════════════════╝");
+            return result;
+        }
+        
+        result.AdbInstalled = true;
+        var versionLine = adbVersion.Output.Split('\n').FirstOrDefault() ?? adbVersion.Error.Split('\n').FirstOrDefault();
+        Console.WriteLine($"  ✓ ADB installed: {versionLine?.Trim()}");
+
+        // Step 2: Check for connected devices
+        Console.WriteLine();
+        Console.WriteLine("▶ Checking for connected devices...");
+        var devicesResult = await RunAdbAsync("devices -l");
+        
+        if (!devicesResult.Success)
+        {
+            Console.WriteLine("  ✗ Failed to query devices");
+            return result;
+        }
+
+        var deviceLines = devicesResult.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => !l.StartsWith("List of devices"))
+            .ToList();
+
+        if (deviceLines.Count == 0)
+        {
+            result.DeviceConnected = false;
+            Console.WriteLine("  ✗ No devices found!");
+            Console.WriteLine();
+            ShowDeviceNotFoundHelp();
+            return result;
+        }
+
+        // Parse device status
+        foreach (var line in deviceLines)
+        {
+            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                var deviceId = parts[0];
+                var status = parts[1];
+                
+                Console.WriteLine($"  Device: {deviceId}");
+                Console.WriteLine($"  Status: {status}");
+                
+                if (status == "unauthorized")
+                {
+                    result.DeviceConnected = true;
+                    result.DeviceAuthorized = false;
+                    Console.WriteLine();
+                    Console.WriteLine("  ╔════════════════════════════════════════════════════════════╗");
+                    Console.WriteLine("  ║  DEVICE NOT AUTHORIZED!                                    ║");
+                    Console.WriteLine("  ╠════════════════════════════════════════════════════════════╣");
+                    Console.WriteLine("  ║  1. Look at your phone screen                              ║");
+                    Console.WriteLine("  ║  2. You should see 'Allow USB debugging?' prompt           ║");
+                    Console.WriteLine("  ║  3. Check 'Always allow from this computer'                ║");
+                    Console.WriteLine("  ║  4. Tap 'Allow'                                            ║");
+                    Console.WriteLine("  ║  5. Run this tool again                                    ║");
+                    Console.WriteLine("  ╚════════════════════════════════════════════════════════════╝");
+                    return result;
+                }
+                else if (status == "offline")
+                {
+                    result.DeviceConnected = true;
+                    result.DeviceAuthorized = false;
+                    Console.WriteLine();
+                    Console.WriteLine("  ╔════════════════════════════════════════════════════════════╗");
+                    Console.WriteLine("  ║  DEVICE OFFLINE!                                           ║");
+                    Console.WriteLine("  ╠════════════════════════════════════════════════════════════╣");
+                    Console.WriteLine("  ║  Try these steps:                                          ║");
+                    Console.WriteLine("  ║  1. Unplug and replug the USB cable                        ║");
+                    Console.WriteLine("  ║  2. Try a different USB port                               ║");
+                    Console.WriteLine("  ║  3. Run: adb kill-server && adb start-server               ║");
+                    Console.WriteLine("  ║  4. Toggle USB debugging off and on                        ║");
+                    Console.WriteLine("  ╚════════════════════════════════════════════════════════════╝");
+                    return result;
+                }
+                else if (status == "device")
+                {
+                    result.DeviceConnected = true;
+                    result.DeviceAuthorized = true;
+                    
+                    // Get device info
+                    var modelResult = await RunAdbAsync("shell getprop ro.product.model");
+                    var androidResult = await RunAdbAsync("shell getprop ro.build.version.release");
+                    
+                    if (modelResult.Success)
+                        Console.WriteLine($"  Model: {modelResult.Output.Trim()}");
+                    if (androidResult.Success)
+                        Console.WriteLine($"  Android: {androidResult.Output.Trim()}");
+                    
+                    Console.WriteLine("  ✓ Device ready!");
+                }
+            }
+        }
+
+        // Step 3: Check if Balatro is installed
+        if (result.DeviceAuthorized)
+        {
+            Console.WriteLine();
+            Console.WriteLine("▶ Checking for Balatro installation...");
+            var packageResult = await RunAdbAsync("shell pm list packages com.unofficial.balatro");
+            
+            if (packageResult.Output.Contains("com.unofficial.balatro"))
+            {
+                result.BalatroInstalled = true;
+                Console.WriteLine("  ✓ Balatro is installed");
+                
+                // Check save directory
+                var saveCheck = await RunAdbAsync("shell run-as com.unofficial.balatro ls /data/data/com.unofficial.balatro/files/save/Balatro/Mods 2>/dev/null");
+                if (saveCheck.Success && !string.IsNullOrWhiteSpace(saveCheck.Output))
+                {
+                    result.ModsPresent = true;
+                    var modCount = saveCheck.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                    Console.WriteLine($"  ✓ Mods folder exists ({modCount} items)");
+                }
+                else
+                {
+                    Console.WriteLine("  ○ Mods folder not found (will be created on transfer)");
+                }
+            }
+            else
+            {
+                result.BalatroInstalled = false;
+                Console.WriteLine("  ○ Balatro not installed yet");
+            }
+        }
+
+        Console.WriteLine();
+        if (result.IsReady)
+        {
+            Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  ✓ ALL CHECKS PASSED - Ready for mod transfer!              ║");
+            Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
+        }
+        
+        return result;
+    }
+
+    private void ShowDeviceNotFoundHelp()
+    {
+        Console.WriteLine("  ╔════════════════════════════════════════════════════════════╗");
+        Console.WriteLine("  ║  DEVICE NOT SHOWING? TRY THESE STEPS:                      ║");
+        Console.WriteLine("  ╠════════════════════════════════════════════════════════════╣");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  1. ENABLE USB DEBUGGING:                                  ║");
+        Console.WriteLine("  ║     Settings → About Phone → Tap 'Build Number' 7 times   ║");
+        Console.WriteLine("  ║     Settings → Developer Options → Enable USB Debugging   ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  2. CHECK USB CONNECTION MODE:                             ║");
+        Console.WriteLine("  ║     When you plug in, select 'File Transfer' or 'MTP'     ║");
+        Console.WriteLine("  ║     (NOT 'Charging only')                                  ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  3. TRY DIFFERENT USB CABLE/PORT:                          ║");
+        Console.WriteLine("  ║     Some cables are charge-only (no data)                  ║");
+        Console.WriteLine("  ║     Try the cable that came with your phone                ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  4. RESTART ADB SERVER:                                    ║");
+        Console.WriteLine("  ║     Open terminal/cmd and run:                             ║");
+        Console.WriteLine("  ║       adb kill-server                                      ║");
+        Console.WriteLine("  ║       adb start-server                                     ║");
+        Console.WriteLine("  ║       adb devices                                          ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  5. INSTALL USB DRIVERS (Windows only):                    ║");
+        Console.WriteLine("  ║     Download from your phone manufacturer's website        ║");
+        Console.WriteLine("  ║     Or use Universal ADB Driver                            ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ║  6. CHECK FOR AUTHORIZATION PROMPT:                        ║");
+        Console.WriteLine("  ║     Look at your phone - tap 'Allow' if prompted           ║");
+        Console.WriteLine("  ║                                                            ║");
+        Console.WriteLine("  ╚════════════════════════════════════════════════════════════╝");
+    }
+
     private async Task<ProcessResult> RunAdbAsync(string arguments)
     {
-        return await RunProcessAsync("adb", arguments);
+        // Use bundled ADB if path was provided, otherwise use system ADB
+        var adbExecutable = _adbPath ?? "adb";
+        return await RunProcessAsync(adbExecutable, arguments);
     }
 
     private async Task<ProcessResult> RunProcessAsync(string fileName, string arguments)
@@ -459,4 +766,18 @@ public class ModTransferResult
     public bool Success { get; set; }
     public List<string> Messages { get; set; } = new();
     public List<string> Errors { get; set; } = new();
+}
+
+public class AdbDiagnosticResult
+{
+    public bool AdbInstalled { get; set; }
+    public bool DeviceConnected { get; set; }
+    public bool DeviceAuthorized { get; set; }
+    public bool BalatroInstalled { get; set; }
+    public bool ModsPresent { get; set; }
+    
+    /// <summary>
+    /// True if ADB is installed, device is connected and authorized.
+    /// </summary>
+    public bool IsReady => AdbInstalled && DeviceConnected && DeviceAuthorized;
 }

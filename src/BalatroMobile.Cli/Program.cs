@@ -39,6 +39,10 @@ internal class Program
             {
                 await RunModsCommand(args.Skip(1).ToArray());
             }
+            else if (args[0] == "adb")
+            {
+                await RunAdbDiagnostics();
+            }
             else if (args[0] == "--help" || args[0] == "-h")
             {
                 ShowUsage();
@@ -972,7 +976,24 @@ internal class Program
         Console.WriteLine("==========================");
         Console.WriteLine();
 
-        var modService = new ModTransferService(msg => Console.WriteLine($"  {msg}"));
+        // Ensure ADB is available (downloads if needed)
+        var toolsManager = new ToolsManager(msg => Console.WriteLine($"  {msg}"));
+        if (!toolsManager.IsAdbAvailable())
+        {
+            Console.WriteLine("ADB not found. Downloading Android Platform Tools...");
+            Console.WriteLine();
+            var adbReady = await toolsManager.EnsureAdbAsync();
+            if (!adbReady)
+            {
+                Console.WriteLine("ERROR: Failed to download ADB. Please install manually.");
+                return;
+            }
+            Console.WriteLine();
+        }
+
+        var modService = new ModTransferService(
+            msg => Console.WriteLine($"  {msg}"),
+            toolsManager.GetAdbExecutablePath());
 
         // Parse arguments
         bool prepareOnly = args.Contains("--prepare-only");
@@ -1091,6 +1112,50 @@ internal class Program
         Console.WriteLine();
     }
 
+    private static async Task RunAdbDiagnostics()
+    {
+        Console.WriteLine("BalatroMobile ADB Diagnostics");
+        Console.WriteLine("=============================");
+        Console.WriteLine();
+        Console.WriteLine("This tool will check your ADB setup and help troubleshoot connection issues.");
+        Console.WriteLine();
+        
+        // Ensure ADB is available (downloads if needed)
+        var toolsManager = new ToolsManager(msg => Console.WriteLine($"  {msg}"));
+        if (!toolsManager.IsAdbAvailable())
+        {
+            Console.WriteLine("ADB not found. Downloading Android Platform Tools...");
+            Console.WriteLine();
+            var adbReady = await toolsManager.EnsureAdbAsync();
+            if (!adbReady)
+            {
+                Console.WriteLine("ERROR: Failed to download ADB.");
+                Console.WriteLine("Please install Android Platform Tools manually from:");
+                Console.WriteLine("https://developer.android.com/studio/releases/platform-tools");
+                WaitForKeyPress();
+                return;
+            }
+            Console.WriteLine();
+        }
+        
+        var modService = new ModTransferService(adbPath: toolsManager.GetAdbExecutablePath());
+        var result = await modService.RunAdbDiagnosticsAsync();
+        
+        Console.WriteLine();
+        if (result.IsReady)
+        {
+            Console.WriteLine("Your device is ready for mod transfer!");
+            Console.WriteLine("Run 'BalatroMobile mods' to transfer mods.");
+        }
+        else
+        {
+            Console.WriteLine("Please fix the issues above and run this command again.");
+        }
+        
+        Console.WriteLine();
+        WaitForKeyPress();
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("BalatroMobile - Build Balatro for Mobile Devices");
@@ -1100,6 +1165,7 @@ internal class Program
         Console.WriteLine("  BalatroMobile check                  - Run pre-flight checks");
         Console.WriteLine("  BalatroMobile build [options]        - Build APK for mobile");
         Console.WriteLine("  BalatroMobile mods [options]         - Prepare and transfer mods to device");
+        Console.WriteLine("  BalatroMobile adb                    - Diagnose ADB connection issues");
         Console.WriteLine("  BalatroMobile transfer [options]     - Transfer saves between PC and Android");
         Console.WriteLine("  BalatroMobile tools [status|download|clear] - Manage build tools");
         Console.WriteLine();

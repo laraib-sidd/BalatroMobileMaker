@@ -140,6 +140,53 @@ public class BuildService : IBuildService
                 }
             }
 
+            // Step 4b: Check for BalatroMobileCompat BEFORE bundling (MANDATORY)
+            progress?.Report("Checking for BalatroMobileCompat...");
+            var balatroAppData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Balatro"
+            );
+            var modsPath = Path.Combine(balatroAppData, "Mods");
+            var mobileCompatPath = Path.Combine(modsPath, "BalatroMobileCompat");
+            
+            if (!Directory.Exists(mobileCompatPath))
+            {
+                Console.WriteLine();
+                Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
+                Console.WriteLine("║  ERROR: BalatroMobileCompat NOT FOUND!                       ║");
+                Console.WriteLine("╠══════════════════════════════════════════════════════════════╣");
+                Console.WriteLine("║  This mod is REQUIRED for mods to work on mobile.            ║");
+                Console.WriteLine("║                                                              ║");
+                Console.WriteLine("║  Download from:                                              ║");
+                Console.WriteLine("║  https://github.com/MathIsFun0/BalatroMobileCompat           ║");
+                Console.WriteLine("║                                                              ║");
+                Console.WriteLine("║  Install to your Mods folder:                                ║");
+                Console.WriteLine($"║  {modsPath,-60} ║");
+                Console.WriteLine("║                                                              ║");
+                Console.WriteLine("║  Then run this tool again.                                   ║");
+                Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
+                Console.WriteLine();
+                
+                errors.Add("BalatroMobileCompat not found - REQUIRED for mobile mods");
+                errors.Add($"Download from: https://github.com/MathIsFun0/BalatroMobileCompat");
+                errors.Add($"Install to: {mobileCompatPath}");
+                return CreateResult(false, null, messages, errors, DateTime.Now - startTime);
+            }
+            messages.Add("Found BalatroMobileCompat (required for mobile)");
+
+            // Step 4c: Bundle Lovely dump files for mod support (HYBRID APPROACH)
+            // This bundles the mod LOADER into game.love; actual Mods are transferred separately
+            progress?.Report("Bundling mod loader (Lovely dump)...");
+            var bundleResult = await BundleLovelyDumpAsync(extractPath, messages);
+            if (bundleResult)
+            {
+                messages.Add("Bundled Lovely dump files into game");
+            }
+            else
+            {
+                messages.Add("Note: Lovely dump not found - building vanilla APK (run game with mods on PC first)");
+            }
+
             // Step 5: Create game.love from patched content
             progress?.Report("Creating game.love package...");
             var gameLovePath = Path.Combine(tempDir, "game.love");
@@ -371,8 +418,9 @@ public class BuildService : IBuildService
         {
             var content = await File.ReadAllTextAsync(manifestPath);
             
-            // Change package name to avoid conflicts with official LÖVE app
-            content = content.Replace("org.love2d.android", "com.unofficial.balatro");
+            // IMPORTANT: Only change the package ATTRIBUTE, not all org.love2d.android references!
+            // The Activity class is still org.love2d.android.GameActivity - don't change that
+            content = content.Replace("package=\"org.love2d.android\"", "package=\"com.unofficial.balatro\"");
             
             // Change app name
             content = content.Replace("android:label=\"LÖVE for Android\"", "android:label=\"Balatro\"");
@@ -534,7 +582,202 @@ public class BuildService : IBuildService
             });
         }
 
+        // CRITICAL: t.identity patch - ensures predictable save directory path
+        // Without this, LÖVE uses default path which breaks mod loading
+        // With t.identity = "Balatro", save path becomes save/Balatro/
+        patches.Add(new PatchConfig
+        {
+            FilePath = "conf.lua",
+            SearchPattern = "t.console = not _RELEASE_MODE",
+            Replacement = "    t.identity = \"Balatro\"\n    t.console = not _RELEASE_MODE",
+            Description = "Set save directory identity (CRITICAL for mods)"
+        });
+
         return patches;
+    }
+
+    /// <summary>
+    /// Bundles Lovely dump files into the extracted game for mod support.
+    /// This is the HYBRID APPROACH: mod loader in game.love, Mods transferred separately.
+    /// </summary>
+    private async Task<bool> BundleLovelyDumpAsync(string extractPath, List<string> messages)
+    {
+        try
+        {
+            // Find Balatro AppData with Lovely dump
+            var balatroAppData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Balatro"
+            );
+            
+            var modsPath = Path.Combine(balatroAppData, "Mods");
+            var lovelyDumpPath = Path.Combine(modsPath, "lovely", "dump");
+            
+            if (!Directory.Exists(lovelyDumpPath))
+            {
+                Console.WriteLine($"  Lovely dump not found at: {lovelyDumpPath}");
+                return false;
+            }
+            
+            Console.WriteLine($"  Found Lovely dump at: {lovelyDumpPath}");
+            
+            // 1. Copy Lovely dump files (overlaying extracted Balatro)
+            foreach (var item in Directory.GetFileSystemEntries(lovelyDumpPath))
+            {
+                var destPath = Path.Combine(extractPath, Path.GetFileName(item));
+                if (Directory.Exists(item))
+                {
+                    await CopyDirectoryAsync(item, destPath);
+                }
+                else
+                {
+                    File.Copy(item, destPath, true);
+                }
+            }
+            messages.Add("Overlaid Lovely dump files");
+            
+            // 2. Create SMODS folder with version.lua and release.lua
+            var smodsLibPath = Path.Combine(modsPath, "smods");
+            var smodsDestPath = Path.Combine(extractPath, "SMODS");
+            Directory.CreateDirectory(smodsDestPath);
+            
+            var versionLuaPath = Path.Combine(smodsLibPath, "version.lua");
+            if (File.Exists(versionLuaPath))
+            {
+                File.Copy(versionLuaPath, Path.Combine(smodsDestPath, "version.lua"), true);
+            }
+            
+            var releaseLuaPath = Path.Combine(smodsLibPath, "release.lua");
+            if (File.Exists(releaseLuaPath))
+            {
+                File.Copy(releaseLuaPath, Path.Combine(smodsDestPath, "release.lua"), true);
+            }
+            
+            // 3. Create nativefs stub (replaces FFI version that doesn't work on Android)
+            var nativefsStub = @"-- NativeFS stub for Android - WORKING VERSION
+local nfs = {}
+local lf = love.filesystem
+local _workingDir = ''
+function nfs.read(arg1, arg2, arg3)
+    local container, name, size
+    if arg3 ~= nil then container, name, size = arg1, arg2, arg3
+    elseif arg2 == nil then container, name, size = 'string', arg1, 'all'
+    else
+        if type(arg2) == 'number' or arg2 == 'all' then container, name, size = 'string', arg1, arg2
+        else container, name, size = arg1, arg2, 'all' end
+    end
+    local contents, bytes = lf.read(name)
+    if not contents then return nil, 0 end
+    if container == 'data' then
+        local filename = name:match('[^/]+$') or name
+        return lf.newFileData(contents, filename), bytes
+    end
+    return contents, bytes
+end
+function nfs.load(path) return lf.load(path) end
+function nfs.getDirectoryItems(dir) return lf.getDirectoryItems(dir) or {} end
+function nfs.getDirectoryItemsInfo(dir, ft)
+    local items = nfs.getDirectoryItems(dir)
+    local r = {}
+    for _, i in ipairs(items) do
+        local p = dir..'/'..i
+        local inf = lf.getInfo(p)
+        if inf and (not ft or inf.type == ft) then inf.name = i; r[#r+1] = inf end
+    end
+    return r
+end
+function nfs.getInfo(path) return lf.getInfo(path) end
+function nfs.setWorkingDirectory(d) _workingDir = d or ''; return true end
+function nfs.getWorkingDirectory() return _workingDir end
+function nfs.write(p, d, s) return lf.write(p, d, s) end
+function nfs.append(p, d, s) return lf.append(p, d, s) end
+function nfs.createDirectory(p) return lf.createDirectory(p) end
+function nfs.remove(p) return lf.remove(p) end
+function nfs.getSaveDirectory() return lf.getSaveDirectory() end
+function nfs.getSourceBaseDirectory() return '' end
+function nfs.isFile(p) local i = lf.getInfo(p); return i and i.type == 'file' end
+function nfs.isDirectory(p) local i = lf.getInfo(p); return i and i.type == 'directory' end
+function nfs.lines(p) return lf.lines(p) end
+function nfs.newFile(p, m) return lf.newFile(p, m) end
+function nfs.newFileData(a1, a2)
+    if a2 then return lf.newFileData(a1, a2)
+    else
+        local c = lf.read(a1)
+        if not c then return nil end
+        return lf.newFileData(c, a1:match('[^/]+$') or a1)
+    end
+end
+return nfs";
+            
+            // Create nativefs.lua at root and nativefs/init.lua
+            var nativefsDir = Path.Combine(extractPath, "nativefs");
+            Directory.CreateDirectory(nativefsDir);
+            await File.WriteAllTextAsync(Path.Combine(nativefsDir, "init.lua"), nativefsStub);
+            await File.WriteAllTextAsync(Path.Combine(extractPath, "nativefs.lua"), nativefsStub);
+            
+            // 4. Create lovely stub
+            var lovelyStub = @"local lovely = {}
+lovely.mod_dir = 'Mods'
+lovely.path = 'Mods'
+lovely.version = '0.6.0'
+return lovely";
+            
+            var lovelyDir = Path.Combine(extractPath, "lovely");
+            Directory.CreateDirectory(lovelyDir);
+            await File.WriteAllTextAsync(Path.Combine(lovelyDir, "init.lua"), lovelyStub);
+            
+            // 5. Copy json.lua from smods
+            var jsonLuaPath = Path.Combine(smodsLibPath, "libs", "json", "json.lua");
+            if (File.Exists(jsonLuaPath))
+            {
+                File.Copy(jsonLuaPath, Path.Combine(extractPath, "json.lua"), true);
+            }
+            
+            // 6. Clean macOS metadata files
+            await CleanMacOsMetadataAsync(extractPath);
+            
+            Console.WriteLine("  Bundled mod loader components successfully");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  Warning: Failed to bundle Lovely dump: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task CopyDirectoryAsync(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(destDir, Path.GetFileName(file));
+            File.Copy(file, destFile, true);
+        }
+        
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
+            await CopyDirectoryAsync(dir, destSubDir);
+        }
+    }
+
+    private async Task CleanMacOsMetadataAsync(string directory)
+    {
+        var metadataFiles = Directory.GetFiles(directory, "._*", SearchOption.AllDirectories);
+        foreach (var file in metadataFiles)
+        {
+            try { File.Delete(file); } catch { }
+        }
+        
+        var dsStoreFiles = Directory.GetFiles(directory, ".DS_Store", SearchOption.AllDirectories);
+        foreach (var file in dsStoreFiles)
+        {
+            try { File.Delete(file); } catch { }
+        }
+        
+        await Task.CompletedTask;
     }
 
     private static BuildResult CreateResult(bool success, string? outputPath, IEnumerable<string> messages, IEnumerable<string> errors, TimeSpan duration)

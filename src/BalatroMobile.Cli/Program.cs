@@ -10,7 +10,7 @@ namespace BalatroMobile.Cli;
 internal class Program
 {
     // Version string - update this when releasing new versions
-    private const string Version = "1.0.6";
+    private const string Version = "1.0.7";
     
     private static async Task Main(string[] args)
     {

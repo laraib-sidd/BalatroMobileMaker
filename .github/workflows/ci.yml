@@ -69,7 +69,9 @@ jobs:
       - name: Build
         run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release --no-restore
 
+      # Only run test publish for PRs (skip on merge to main since release.yml handles it)
       - name: Test publish (verify single-file build works)
+        if: github.event_name == 'pull_request'
         run: |
           dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj `
             --configuration Release `
@@ -81,6 +83,7 @@ jobs:
             --output ./test-release
 
       - name: Verify EXE created
+        if: github.event_name == 'pull_request'
         run: |
           if (Test-Path ./test-release/BalatroMobile.exe) {
             Write-Host "Build successful! EXE size: $((Get-Item ./test-release/BalatroMobile.exe).Length / 1MB) MB"

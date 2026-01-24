@@ -290,17 +290,34 @@ public class BuildService : IBuildService
             Directory.CreateDirectory(assetsPath);
             Console.WriteLine($"[BUILD] Assets folder exists after create: {Directory.Exists(assetsPath)}");
             
-            // CRITICAL: Delete ANY existing files in assets that might interfere with game.love loading
-            Console.WriteLine($"[BUILD] Cleaning assets folder...");
+            // CRITICAL: Delete ANY existing files AND directories in assets that might interfere with game.love loading
+            // LÖVE loads from assets/a/, assets/game.love, or assets/*.lua - we need ONLY game.love
+            Console.WriteLine($"[BUILD] Cleaning assets folder (files and directories)...");
+            
+            // First, delete all FILES in assets (except in dexopt)
             foreach (var existingFile in Directory.GetFiles(assetsPath))
             {
                 var fileName = Path.GetFileName(existingFile);
-                // Keep only dexopt folder contents, delete everything else
-                if (!existingFile.Contains("dexopt"))
+                Console.WriteLine($"[BUILD] REMOVING FILE: {fileName}");
+                File.Delete(existingFile);
+            }
+            
+            // Then, delete all SUBDIRECTORIES in assets (except dexopt)
+            foreach (var subDir in Directory.GetDirectories(assetsPath))
+            {
+                var dirName = Path.GetFileName(subDir);
+                if (dirName != "dexopt")
                 {
-                    Console.WriteLine($"[BUILD] REMOVING: {fileName}");
-                    File.Delete(existingFile);
+                    Console.WriteLine($"[BUILD] REMOVING DIRECTORY: {dirName}/");
+                    Directory.Delete(subDir, true);  // recursive delete
                 }
+            }
+            
+            // List what remains
+            Console.WriteLine($"[BUILD] Assets folder after cleanup:");
+            foreach (var item in Directory.GetFileSystemEntries(assetsPath))
+            {
+                Console.WriteLine($"[BUILD]   - {Path.GetFileName(item)}");
             }
             
             // Modify apktool.yml to ensure game.love is NOT compressed

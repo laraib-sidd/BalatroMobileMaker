@@ -208,6 +208,67 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - All contributors to the original balatro-mobile-maker project
 - The LÖVE framework developers
 
+## 📱 Mobile Modding Guide
+
+### How Mobile Modding Works
+
+1. **Build vanilla APK** with mobile compatibility patches
+2. **Transfer mod files** to device storage after installation
+3. **Game loads mods** from storage location on launch
+
+### Supported Mods (Tested)
+
+- ✅ Steamodded (SMODS)
+- ✅ Cryptid
+- ✅ Talisman
+- ✅ BalatroMobileCompat (required)
+- ✅ Tag Manager
+- ✅ Restart Run Button
+- ✅ Brainstorm Reroll Button
+
+### Required Files for Modding
+
+After building and installing the APK, transfer these files to your device:
+
+```
+/data/data/com.unofficial.balatro/files/save/game/
+├── Mods/                      # Your PC Mods folder
+│   ├── BalatroMobileCompat/   # Required!
+│   ├── Cryptid/
+│   ├── Talisman/
+│   └── ...
+├── [Lovely dump files]        # From Mods/lovely/dump/
+├── nativefs/init.lua          # Stub file
+├── lovely/init.lua            # Stub file
+└── lovely.lua                 # Config file
+```
+
+### Transfer via ADB
+
+```bash
+# Create tar archive of mod files
+tar -cvf transfer.tar -C game .
+
+# Push to device
+adb push transfer.tar /data/local/tmp/
+
+# Extract (Android 11+ compatible)
+adb shell "run-as com.unofficial.balatro sh -c 'cd /data/data/com.unofficial.balatro/files/save/game && tar -xf /data/local/tmp/transfer.tar'"
+
+# Clean macOS metadata files (important!)
+adb shell "run-as com.unofficial.balatro find /data/data/com.unofficial.balatro/files/save/game -name '._*' -delete"
+```
+
+### Important Notes
+
+- **macOS users**: Always remove `._*` files before transfer (they cause Lua syntax errors)
+- **Android 11+**: Use `run-as` method shown above (direct push to app data is blocked)
+- **First launch**: Install APK and launch once before transferring mods (creates directories)
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed technical documentation.
+
+---
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -230,11 +291,24 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 💡 Install OpenJDK or ensure Java is in PATH
 ```
 
+**Game Crashes with "unexpected symbol" in ._*.lua**
+```
+❌ macOS metadata files included in transfer
+💡 Remove ._* files: find . -name "._*" -delete (before transfer)
+    Or on device: adb shell "run-as com.unofficial.balatro find ... -name '._*' -delete"
+```
+
+**Permission Denied on Android 11+**
+```
+❌ Cannot push to /sdcard/Android/data/
+💡 Use the run-as method with tar archives (see Mobile Modding Guide above)
+```
+
 ### Getting Help
 
 - Check the [Issues](https://github.com/laraib-sidd/BalatroMobileMaker/issues) page
 - Join the [Balatro Modding Discord](https://discord.gg/balatro)
-- Read the [Balatro Mobile Modding Guide](https://github.com/laraib-sidd/BalatroMobileMaker/wiki)
+- Read the [CHANGELOG.md](CHANGELOG.md) for technical details
 
 ---
 

@@ -1,84 +1,95 @@
 # BalatroMobile Implementation Notes
 
-## Current Issue (January 2026)
+## STATUS: WORKING (January 24, 2026)
 
-**Crash:** `[SMODS _ "src/game_object.lua"]:433: bad argument #2 to 'newFileData' (string expected, got nil)`
+**Modded Balatro running on Android!** The hybrid approach works:
+- Lovely dump bundled in game.love
+- Mods transferred to save directory
+- Custom nativefs stub handles Android limitations
 
-### Root Cause
-The `nativefs` stub in `ModTransferService.cs` does NOT properly resolve paths relative to the working directory.
-
-When SMODS does:
-```lua
-nfs.setWorkingDirectory("Mods/smods/assets/2x")
-nfs.read("mod_tags.png")  -- Expects to read Mods/smods/assets/2x/mod_tags.png
-```
-
-Our current stub does:
-```lua
-function nfs.read(path) return lf.read(path) end  -- Just reads "mod_tags.png" - FAILS!
-```
-
-It should use the working directory to construct the full path.
-
-### The Fix Required
-The `nativefs` stub needs a `resolvePath()` helper that prepends the working directory:
-
-```lua
-local function resolvePath(path)
-    if path:sub(1,1) == "/" then return path end  -- absolute path
-    if _workingDir ~= "" then
-        return _workingDir .. "/" .. path
-    end
-    return path
-end
-
-function nfs.read(path)
-    local resolved = resolvePath(path)
-    local data = lf.read(resolved)
-    if data then return data end
-    return lf.read(path)  -- fallback
-end
-```
+See `local/WORKING_STEPS.md` for complete working procedure.
 
 ---
 
-## History of Issues
+## The Working Solution
+
+### Key Insight: Hybrid Approach
+
+The solution requires a **hybrid** bundling strategy:
+
+1. **Bundle IN game.love:** Lovely dump files (mod loader), nativefs stub, lovely stub, SMODS/version.lua, json.lua
+2. **Transfer to save directory:** Actual Mods folder
+
+**Why:** LÖVE loads from game.love FIRST. Files in save directory won't override game.love, so the mod loader MUST be in game.love.
+
+### Critical Configuration
+
+**conf.lua must have `t.identity`:**
+```lua
+function love.conf(t)
+    t.identity = "Balatro"  -- CRITICAL: Sets save path to save/Balatro/
+    ...
+end
+```
+
+Without `t.identity`, LÖVE uses unpredictable default save paths.
+
+### NativeFS Stub
+
+The FFI-based nativefs doesn't work on Android. Key requirements for the stub:
+
+1. **Handle multiple read() signatures:**
+   - `read(path)` → returns string
+   - `read('data', path)` → returns FileData, NOT string!
+   - `read('string', path, size)` → returns string with size limit
+
+2. **newFileData() must support both forms:**
+   - `newFileData(contents, filename)` - two args
+   - `newFileData(filepath)` - one arg, reads file first
+
+---
+
+## History of Issues (Resolved)
 
 ### Issue 1: Build Environment Validation Failed
-- **Symptom:** Java and APKTool tests pass but validation fails
-- **Root Cause:** `java -version` outputs to stderr, not stdout. JavaTool only returned stdout on success.
-- **Fix:** Modified `ExecuteAndCaptureOutputAsync` to return stderr when stdout is empty
+- **Root Cause:** `java -version` outputs to stderr
+- **Fix:** Check stderr when stdout is empty
 
 ### Issue 2: Failed to Extract Game Content
-- **Symptom:** Balatro.exe couldn't be found
-- **Root Cause:** Code tried to read from Steam directory, but users needed to copy Balatro.exe locally
-- **Fix:** Changed to look for Balatro.exe in current working directory
+- **Root Cause:** Code looked for Balatro.exe in Steam directory
+- **Fix:** Look in current working directory
 
 ### Issue 3: JSON module not found
-- **Symptom:** `module 'json' not found`
-- **Root Cause:** Missing json.lua in game.love
-- **Fix:** Need to copy json.lua from mods
+- **Root Cause:** Missing json.lua
+- **Fix:** Copy from smods/libs/json/
 
 ### Issue 4: nativefs FFI errors
-- **Symptom:** FFI calls fail on Android
-- **Root Cause:** nativefs uses LuaJIT FFI which doesn't work on Android
+- **Root Cause:** LuaJIT FFI doesn't work on Android
 - **Fix:** Created nativefs stub using love.filesystem
 
 ### Issue 5: SMODS.path is nil
-- **Symptom:** `main.lua:1365: attempt to concatenate field 'path' (a nil value)`
-- **Root Cause:** `lovely` module stub didn't have `path` field
-- **Fix:** Added `lovely.path = "Mods"` to lovely stub
+- **Root Cause:** find_self() couldn't find core.lua
+- **Multiple causes explored:**
+  - lovely stub missing `path` field
+  - Wrong save directory path (t.identity not set)
+  - nativefs not properly handling working directory
+- **Fix:** Proper t.identity, correct lovely.mod_dir, working nativefs stub
 
-### Issue 6: SMODS/version not found
-- **Symptom:** `no 'SMODS/version' in LOVE game directories`
-- **Root Cause:** main.lua requires 'SMODS.version' but files are in Mods/smods/
-- **Fix:** Copy version.lua and release.lua to SMODS/ directory
+### Issue 6: SMODS/version and release not found
+- **Root Cause:** main.lua requires 'SMODS.version' and 'SMODS.release'
+- **Fix:** Copy both files to SMODS/ directory in game.love
 
-### Issue 7: nativefs.read returns nil (FIXED in this commit)
-- **Symptom:** `bad argument #2 to 'newFileData' (string expected, got nil)`
-- **Root Cause:** nativefs stub doesn't use working directory for read()
-- **Fix:** Added resolvePath() helper that prepends _workingDir to relative paths
-- **Additional Fix:** Now creates nativefs.lua at root AND replaces all FFI nativefs.lua in mods
+### Issue 7: newFileData errors
+- **Root Cause:** nativefs.read('data', path) returned string instead of FileData
+- **Fix:** Check container type and return FileData when mode='data'
+
+### Issue 8: Sound thread crashes
+- **Root Cause:** newDecoder received invalid FileData
+- **Fix:** Ensure nativefs.read('data', path) properly creates FileData
+
+### Issue 9: Mods not loading (vanilla game shown)
+- **Root Cause:** LÖVE loads game.love first, ignoring save directory files
+- **Fix:** Bundle Lovely dump INTO game.love (hybrid approach)
 
 ---
 
@@ -86,9 +97,10 @@ end
 
 | File | Purpose |
 |------|---------|
-| `src/BalatroMobile.Core/Services/ModTransferService.cs` | Creates nativefs and lovely stubs |
+| `local/WORKING_STEPS.md` | Complete working procedure |
+| `local/hybrid-build/` | Working build directory |
+| `src/BalatroMobile.Core/Services/ModTransferService.cs` | Needs update with working nativefs stub |
 | `src/BalatroMobile.Core/Services/BuildService.cs` | Main build orchestration |
-| `src/BalatroMobile.Infrastructure/Tools/GameExtractor.cs` | Extracts Balatro.exe content |
 
 ---
 
@@ -96,38 +108,31 @@ end
 
 1. ✅ APK builds successfully
 2. ✅ Game installs on Android
-3. ✅ Base game runs (without mods)
-4. ✅ Mods get bundled into APK
-5. ⏳ Modded game - testing needed after nativefs fix
+3. ✅ Mods load correctly (Steamodded, Cryptid, Talisman)
+4. ✅ MODS button appears in menu
+5. ✅ Gameplay with mods works
+6. ⚠️ HTTP module unavailable (expected - no networking on Android LÖVE)
 
 ---
 
-## Original balatro-mobile-maker Approach
+## Next Steps
 
-The original blake502/balatro-mobile-maker:
-- **Does NOT bundle mods into APK**
-- Creates vanilla Balatro APK only
-- Users must transfer modded saves via ADB separately
-- Mods are "not officially supported"
-
-Our approach tries to bundle mods directly, which requires the nativefs compatibility layer.
+1. **Update ModTransferService.cs** with working nativefs stub
+2. **Update BuildService.cs** to use hybrid approach:
+   - Bundle Lovely dump in game.love
+   - Transfer Mods separately
+3. **Add t.identity** to conf.lua patching
+4. **Test full build pipeline**
+5. **Create PR and release**
 
 ---
 
 ## Testing Checklist
 
 Before each release:
-- [ ] Build APK with mods enabled
+- [ ] Build APK with hybrid approach
 - [ ] Install on Android device/emulator
-- [ ] Launch game - should reach main menu
-- [ ] Check SMODS loads correctly
-- [ ] Check Cryptid/Talisman content visible
-
----
-
-## Next Steps
-
-1. Fix nativefs stub in ModTransferService.cs
-2. Test on Android VM
-3. Create PR with fix
-4. Tag new release
+- [ ] Launch game - should show MODS button
+- [ ] Click MODS - should list installed mods
+- [ ] Start game - mods should affect gameplay
+- [ ] Check Cryptid content visible

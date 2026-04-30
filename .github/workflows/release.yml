@@ -6,12 +6,31 @@ on:
       - 'v*'
 
 permissions:
-  contents: write  # Required to create releases and upload assets
+  contents: write
 
 jobs:
   build:
-    runs-on: windows-latest
-    
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            cli_name: BalatroMobile.exe
+            gui_name: BalatroMobileGui.exe
+          - os: macos-latest
+            rid: osx-x64
+            cli_name: BalatroMobile
+            gui_name: BalatroMobileGui
+          - os: macos-latest
+            rid: osx-arm64
+            cli_name: BalatroMobile
+            gui_name: BalatroMobileGui
+          - os: ubuntu-latest
+            rid: linux-x64
+            cli_name: BalatroMobile
+            gui_name: BalatroMobileGui
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,46 +40,79 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore src/BalatroMobile.Cli/BalatroMobile.Cli.csproj
+      - name: Publish CLI
+        run: >
+          dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          --output ./release-cli
 
-      - name: Build
-        run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release --no-restore
+      - name: Publish GUI
+        run: >
+          dotnet publish src/BalatroMobile.Gui/BalatroMobile.Gui.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          --output ./release-gui
 
-      - name: Publish single-file EXE
+      - name: Rename artifacts
+        shell: bash
         run: |
-          dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            --output ./release
+          mkdir -p ./release
+          if [[ "${{ matrix.rid }}" == win* ]]; then
+            cp ./release-cli/${{ matrix.cli_name }} ./release/BalatroMobile-cli-${{ matrix.rid }}.exe
+            cp ./release-gui/${{ matrix.gui_name }} ./release/BalatroMobile-${{ matrix.rid }}.exe
+          else
+            cp ./release-cli/${{ matrix.cli_name }} ./release/BalatroMobile-cli-${{ matrix.rid }}
+            cp ./release-gui/${{ matrix.gui_name }} ./release/BalatroMobile-${{ matrix.rid }}
+          fi
 
-      - name: List release files
-        run: dir ./release
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.rid }}
+          path: ./release/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            release/BalatroMobile.exe
+          files: ./artifacts/**/*
           body: |
             ## BalatroMobile ${{ github.ref_name }}
-            
-            Download `BalatroMobile.exe` and double-click to run.
-            
-            ### Features
-            - Interactive wizard mode - just double-click and follow prompts
-            - Build modded APKs with Cryptid, Talisman, and other Steamodded mods
-            - Transfer saves between PC and Android
-            - No .NET runtime required (self-contained)
-            
+
+            ### GUI (Recommended)
+            Download the `BalatroMobile-<platform>` file for your OS and double-click to run.
+
+            | Platform | File |
+            |----------|------|
+            | Windows | `BalatroMobile-win-x64.exe` |
+            | macOS (Intel) | `BalatroMobile-osx-x64` |
+            | macOS (Apple Silicon) | `BalatroMobile-osx-arm64` |
+            | Linux | `BalatroMobile-linux-x64` |
+
+            ### CLI
+            For command-line usage, download `BalatroMobile-cli-<platform>`.
+
             ### Requirements
-            - Steam Balatro installed on PC
-            - Java Runtime Environment (JRE) for APK building
-            - (Optional) ADB for save transfer
+            - Steam Balatro installed on PC with mods working
+            - Android device with USB debugging enabled
           draft: false
           prerelease: false
         env:

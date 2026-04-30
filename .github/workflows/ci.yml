@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
-    
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,28 +22,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore src/BalatroMobile.Cli/BalatroMobile.Cli.csproj
+      - name: Restore and build CLI
+        run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release
 
-      - name: Build
-        run: dotnet build src/BalatroMobile.Cli/BalatroMobile.Cli.csproj --configuration Release --no-restore
-
-      - name: Test publish (verify single-file build works)
-        run: |
-          dotnet publish src/BalatroMobile.Cli/BalatroMobile.Cli.csproj `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            --output ./test-release
-
-      - name: Verify EXE created
-        run: |
-          if (Test-Path ./test-release/BalatroMobile.exe) {
-            Write-Host "Build successful! EXE size: $((Get-Item ./test-release/BalatroMobile.exe).Length / 1MB) MB"
-          } else {
-            Write-Error "BalatroMobile.exe not found!"
-            exit 1
-          }
+      - name: Restore and build GUI
+        run: dotnet build src/BalatroMobile.Gui/BalatroMobile.Gui.csproj --configuration Release

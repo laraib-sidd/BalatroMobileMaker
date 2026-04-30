@@ -1,0 +1,106 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Balatro Casino Dark — Color Palette -->
+  <Color x:Key="BalatroNavy">#1a1a2e</Color>
+  <Color x:Key="BalatroDeepBlue">#16213e</Color>
+  <Color x:Key="BalatroMidnight">#0f3460</Color>
+  <Color x:Key="BalatroNeonRed">#e94560</Color>
+  <Color x:Key="BalatroNeonPink">#ff6b6b</Color>
+  <Color x:Key="BalatroTextPrimary">#e0e0e0</Color>
+  <Color x:Key="BalatroTextSecondary">#8888aa</Color>
+  <Color x:Key="BalatroSuccess">#4ecca3</Color>
+  <Color x:Key="BalatroWarning">#ffc857</Color>
+  <Color x:Key="BalatroError">#ff6b6b</Color>
+  <Color x:Key="BalatroCardBg">#1e2a4a</Color>
+  <Color x:Key="BalatroCardBorder">#20FFFFFF</Color>
+
+  <!-- Brushes -->
+  <SolidColorBrush x:Key="BalatroNavyBrush" Color="{StaticResource BalatroNavy}" />
+  <SolidColorBrush x:Key="BalatroDeepBlueBrush" Color="{StaticResource BalatroDeepBlue}" />
+  <SolidColorBrush x:Key="BalatroMidnightBrush" Color="{StaticResource BalatroMidnight}" />
+  <SolidColorBrush x:Key="BalatroNeonRedBrush" Color="{StaticResource BalatroNeonRed}" />
+  <SolidColorBrush x:Key="BalatroNeonPinkBrush" Color="{StaticResource BalatroNeonPink}" />
+  <SolidColorBrush x:Key="BalatroTextPrimaryBrush" Color="{StaticResource BalatroTextPrimary}" />
+  <SolidColorBrush x:Key="BalatroTextSecondaryBrush" Color="{StaticResource BalatroTextSecondary}" />
+  <SolidColorBrush x:Key="BalatroSuccessBrush" Color="{StaticResource BalatroSuccess}" />
+  <SolidColorBrush x:Key="BalatroWarningBrush" Color="{StaticResource BalatroWarning}" />
+  <SolidColorBrush x:Key="BalatroErrorBrush" Color="{StaticResource BalatroError}" />
+  <SolidColorBrush x:Key="BalatroCardBgBrush" Color="{StaticResource BalatroCardBg}" />
+  <SolidColorBrush x:Key="BalatroCardBorderBrush" Color="{StaticResource BalatroCardBorder}" />
+
+  <!-- Button Style: Neon Red CTA -->
+  <Style Selector="Button.balatro-cta">
+    <Setter Property="Background" Value="{StaticResource BalatroNeonRedBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Padding" Value="24,12" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.balatro-cta:pointerover">
+    <Setter Property="Background" Value="{StaticResource BalatroNeonPinkBrush}" />
+  </Style>
+  <Style Selector="Button.balatro-cta:disabled">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- Button Style: Secondary -->
+  <Style Selector="Button.balatro-secondary">
+    <Setter Property="Background" Value="{StaticResource BalatroCardBgBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroTextPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BalatroCardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.balatro-secondary:pointerover">
+    <Setter Property="Background" Value="{StaticResource BalatroMidnightBrush}" />
+  </Style>
+
+  <!-- Card Panel Style -->
+  <Style Selector="Border.balatro-card">
+    <Setter Property="Background" Value="{StaticResource BalatroCardBgBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BalatroCardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <!-- Sidebar nav item -->
+  <Style Selector="Button.sidebar-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroTextSecondaryBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.sidebar-item:pointerover">
+    <Setter Property="Background" Value="#10FFFFFF" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroTextPrimaryBrush}" />
+  </Style>
+
+  <!-- Progress bar -->
+  <Style Selector="ProgressBar.balatro-progress">
+    <Setter Property="Background" Value="{StaticResource BalatroDeepBlueBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroNeonRedBrush}" />
+    <Setter Property="MinHeight" Value="8" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
+  <!-- Text styles -->
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroTextPrimaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource BalatroTextSecondaryBrush}" />
+  </Style>
+
+</ResourceDictionary>

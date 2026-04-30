@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             x:Class="BalatroMobile.Gui.Views.ModManagerView"
+             x:DataType="vm:ModManagerViewModel">
+  <TextBlock Text="Mod Manager — coming soon" Classes="heading" />
+</UserControl>

@@ -1,33 +1,35 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- Balatro Casino Dark — Color Palette -->
-  <Color x:Key="BalatroNavy">#1a1a2e</Color>
-  <Color x:Key="BalatroDeepBlue">#16213e</Color>
-  <Color x:Key="BalatroMidnight">#0f3460</Color>
-  <Color x:Key="BalatroNeonRed">#e94560</Color>
-  <Color x:Key="BalatroNeonPink">#ff6b6b</Color>
-  <Color x:Key="BalatroTextPrimary">#e0e0e0</Color>
-  <Color x:Key="BalatroTextSecondary">#8888aa</Color>
-  <Color x:Key="BalatroSuccess">#4ecca3</Color>
-  <Color x:Key="BalatroWarning">#ffc857</Color>
-  <Color x:Key="BalatroError">#ff6b6b</Color>
-  <Color x:Key="BalatroCardBg">#1e2a4a</Color>
-  <Color x:Key="BalatroCardBorder">#20FFFFFF</Color>
+  <Styles.Resources>
+    <!-- Balatro Casino Dark — Color Palette -->
+    <Color x:Key="BalatroNavy">#1a1a2e</Color>
+    <Color x:Key="BalatroDeepBlue">#16213e</Color>
+    <Color x:Key="BalatroMidnight">#0f3460</Color>
+    <Color x:Key="BalatroNeonRed">#e94560</Color>
+    <Color x:Key="BalatroNeonPink">#ff6b6b</Color>
+    <Color x:Key="BalatroTextPrimary">#e0e0e0</Color>
+    <Color x:Key="BalatroTextSecondary">#8888aa</Color>
+    <Color x:Key="BalatroSuccess">#4ecca3</Color>
+    <Color x:Key="BalatroWarning">#ffc857</Color>
+    <Color x:Key="BalatroError">#ff6b6b</Color>
+    <Color x:Key="BalatroCardBg">#1e2a4a</Color>
+    <Color x:Key="BalatroCardBorder">#20FFFFFF</Color>
 
-  <!-- Brushes -->
-  <SolidColorBrush x:Key="BalatroNavyBrush" Color="{StaticResource BalatroNavy}" />
-  <SolidColorBrush x:Key="BalatroDeepBlueBrush" Color="{StaticResource BalatroDeepBlue}" />
-  <SolidColorBrush x:Key="BalatroMidnightBrush" Color="{StaticResource BalatroMidnight}" />
-  <SolidColorBrush x:Key="BalatroNeonRedBrush" Color="{StaticResource BalatroNeonRed}" />
-  <SolidColorBrush x:Key="BalatroNeonPinkBrush" Color="{StaticResource BalatroNeonPink}" />
-  <SolidColorBrush x:Key="BalatroTextPrimaryBrush" Color="{StaticResource BalatroTextPrimary}" />
-  <SolidColorBrush x:Key="BalatroTextSecondaryBrush" Color="{StaticResource BalatroTextSecondary}" />
-  <SolidColorBrush x:Key="BalatroSuccessBrush" Color="{StaticResource BalatroSuccess}" />
-  <SolidColorBrush x:Key="BalatroWarningBrush" Color="{StaticResource BalatroWarning}" />
-  <SolidColorBrush x:Key="BalatroErrorBrush" Color="{StaticResource BalatroError}" />
-  <SolidColorBrush x:Key="BalatroCardBgBrush" Color="{StaticResource BalatroCardBg}" />
-  <SolidColorBrush x:Key="BalatroCardBorderBrush" Color="{StaticResource BalatroCardBorder}" />
+    <!-- Brushes -->
+    <SolidColorBrush x:Key="BalatroNavyBrush" Color="{StaticResource BalatroNavy}" />
+    <SolidColorBrush x:Key="BalatroDeepBlueBrush" Color="{StaticResource BalatroDeepBlue}" />
+    <SolidColorBrush x:Key="BalatroMidnightBrush" Color="{StaticResource BalatroMidnight}" />
+    <SolidColorBrush x:Key="BalatroNeonRedBrush" Color="{StaticResource BalatroNeonRed}" />
+    <SolidColorBrush x:Key="BalatroNeonPinkBrush" Color="{StaticResource BalatroNeonPink}" />
+    <SolidColorBrush x:Key="BalatroTextPrimaryBrush" Color="{StaticResource BalatroTextPrimary}" />
+    <SolidColorBrush x:Key="BalatroTextSecondaryBrush" Color="{StaticResource BalatroTextSecondary}" />
+    <SolidColorBrush x:Key="BalatroSuccessBrush" Color="{StaticResource BalatroSuccess}" />
+    <SolidColorBrush x:Key="BalatroWarningBrush" Color="{StaticResource BalatroWarning}" />
+    <SolidColorBrush x:Key="BalatroErrorBrush" Color="{StaticResource BalatroError}" />
+    <SolidColorBrush x:Key="BalatroCardBgBrush" Color="{StaticResource BalatroCardBg}" />
+    <SolidColorBrush x:Key="BalatroCardBorderBrush" Color="{StaticResource BalatroCardBorder}" />
+  </Styles.Resources>
 
   <!-- Button Style: Neon Red CTA -->
   <Style Selector="Button.balatro-cta">
@@ -103,4 +105,4 @@
     <Setter Property="Foreground" Value="{StaticResource BalatroTextSecondaryBrush}" />
   </Style>
 
-</ResourceDictionary>
+</Styles>

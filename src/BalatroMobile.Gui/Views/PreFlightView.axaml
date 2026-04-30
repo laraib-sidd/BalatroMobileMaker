@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             x:Class="BalatroMobile.Gui.Views.PreFlightView"
+             x:DataType="vm:PreFlightViewModel">
+  <TextBlock Text="Pre-Flight Checks — coming soon" Classes="heading" />
+</UserControl>

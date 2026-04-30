@@ -4,6 +4,6 @@
              RequestedThemeVariant="Dark">
   <Application.Styles>
     <FluentTheme />
-    <StyleInclude Source="avares://BalatroMobile.Gui/Themes/BalatroTheme.axaml" />
+    <StyleInclude Source="avares://BalatroMobileGui/Themes/BalatroTheme.axaml" />
   </Application.Styles>
 </Application>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reactive;
 using BalatroMobile.Core.Models;
 using BalatroMobile.Core.Services;
@@ -45,6 +46,8 @@ public class SaveTransferViewModel : ViewModelBase
 
         var canTransfer = this.WhenAnyValue(x => x.IsTransferring, t => !t);
         TransferCommand = ReactiveCommand.CreateFromTask(RunTransfer, canTransfer);
+        TransferCommand.ThrownExceptions
+            .Subscribe(ex => { ErrorMessage = ex.Message; Debug.WriteLine($"Transfer error: {ex}"); });
         ToggleDirectionCommand = ReactiveCommand.Create(() => { PcToAndroid = !PcToAndroid; });
     }
 

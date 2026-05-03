@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -67,30 +68,37 @@ public class HomeViewModel : ViewModelBase, IActivatableViewModel
                 tools == CardStatus.Pass && !building);
 
         BuildAndInstallCommand = ReactiveCommand.CreateFromTask(RunBuildAndInstall, canBuild);
+        BuildAndInstallCommand.ThrownExceptions
+            .Subscribe(ex => { BuildError = ex.Message; Debug.WriteLine($"Build error: {ex}"); });
 
         this.WhenActivated(disposables =>
         {
             DeviceWatcher.Watch(TimeSpan.FromSeconds(3))
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(state =>
-                {
-                    DeviceStatus = state.Status switch
+                .Subscribe(
+                    state =>
                     {
-                        DeviceConnectionStatus.Connected => CardStatus.Pass,
-                        DeviceConnectionStatus.Disconnected => CardStatus.Warning,
-                        _ => CardStatus.Fail
-                    };
-                    DeviceValue = state.Status switch
-                    {
-                        DeviceConnectionStatus.Connected => state.DeviceName ?? "Connected",
-                        DeviceConnectionStatus.Disconnected => "Connect your Android device via USB",
-                        _ => "ADB not found"
-                    };
-                })
+                        DeviceStatus = state.Status switch
+                        {
+                            DeviceConnectionStatus.Connected => CardStatus.Pass,
+                            DeviceConnectionStatus.Disconnected => CardStatus.Warning,
+                            _ => CardStatus.Fail
+                        };
+                        DeviceValue = state.Status switch
+                        {
+                            DeviceConnectionStatus.Connected => state.DeviceName ?? "Connected",
+                            DeviceConnectionStatus.Disconnected => "Connect your Android device via USB",
+                            _ => "ADB not found"
+                        };
+                    },
+                    ex => Debug.WriteLine($"DeviceWatcher error: {ex}"))
                 .DisposeWith(disposables);
 
             Observable.StartAsync(RunInitialChecks)
-                .Subscribe()
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(
+                    _ => { },
+                    ex => Debug.WriteLine($"Initial checks error: {ex}"))
                 .DisposeWith(disposables);
         });
     }

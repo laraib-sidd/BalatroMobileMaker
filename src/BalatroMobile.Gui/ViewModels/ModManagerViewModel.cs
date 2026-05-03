@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -74,7 +75,10 @@ public class ModManagerViewModel : ViewModelBase, IActivatableViewModel
 
             Mods.ToObservableChangeSet()
                 .AutoRefresh(m => m.IsSelected)
-                .Subscribe(_ => UpdateSummary())
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(
+                    _ => UpdateSummary(),
+                    ex => Debug.WriteLine($"ModManager error: {ex}"))
                 .DisposeWith(disposables);
         });
     }

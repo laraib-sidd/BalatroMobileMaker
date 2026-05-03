@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reactive;
 using ReactiveUI;
 
@@ -25,6 +26,12 @@ public class MainWindowViewModel : ReactiveObject, IScreen
             () => Router.Navigate.Execute(new SettingsViewModel(this)));
         GoPreFlight = ReactiveCommand.CreateFromObservable(
             () => Router.Navigate.Execute(new PreFlightViewModel(this)));
+
+        GoHome.ThrownExceptions.Subscribe(ex => Debug.WriteLine($"Navigation error: {ex}"));
+        GoMods.ThrownExceptions.Subscribe(ex => Debug.WriteLine($"Navigation error: {ex}"));
+        GoSaveTransfer.ThrownExceptions.Subscribe(ex => Debug.WriteLine($"Navigation error: {ex}"));
+        GoSettings.ThrownExceptions.Subscribe(ex => Debug.WriteLine($"Navigation error: {ex}"));
+        GoPreFlight.ThrownExceptions.Subscribe(ex => Debug.WriteLine($"Navigation error: {ex}"));
 
         GoHome.Execute().Subscribe();
     }

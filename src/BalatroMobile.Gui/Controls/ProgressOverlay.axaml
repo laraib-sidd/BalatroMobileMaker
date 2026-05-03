@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BalatroMobile.Gui.Controls.ProgressOverlay">
+  <Border Classes="balatro-card">
+    <StackPanel Spacing="12">
+      <TextBlock x:Name="StepText" Classes="heading" Text="Building..." />
+      <ProgressBar x:Name="ProgressBarControl" Classes="balatro-progress"
+                   Minimum="0" Maximum="100" />
+      <TextBlock x:Name="DetailText" Classes="caption" TextWrapping="Wrap" />
+      <Border x:Name="ErrorBorder" IsVisible="False"
+              Background="#30ff6b6b" CornerRadius="8" Padding="12" Margin="0,8,0,0">
+        <TextBlock x:Name="ErrorText" Foreground="{StaticResource BalatroErrorBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+    </StackPanel>
+  </Border>
+</UserControl>

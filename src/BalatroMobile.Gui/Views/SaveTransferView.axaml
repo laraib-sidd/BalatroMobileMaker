@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             x:Class="BalatroMobile.Gui.Views.SaveTransferView"
+             x:DataType="vm:SaveTransferViewModel">
+
+  <StackPanel Spacing="24" MaxWidth="500">
+    <TextBlock Text="&#x1F4BE; Save Transfer" FontSize="24" FontWeight="Bold"
+               Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+
+    <Border Classes="balatro-card">
+      <StackPanel Spacing="16" HorizontalAlignment="Center">
+        <TextBlock Text="{Binding DirectionLabel}" FontSize="20" FontWeight="SemiBold"
+                   Foreground="{StaticResource BalatroTextPrimaryBrush}"
+                   HorizontalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+          <Border Classes="balatro-card" Padding="12" MinWidth="120">
+            <TextBlock Text="&#x1F4BB; PC" HorizontalAlignment="Center"
+                       Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+          </Border>
+          <Button Classes="balatro-secondary" Command="{Binding ToggleDirectionCommand}"
+                  Content="&#x21C4; Swap" VerticalAlignment="Center" />
+          <Border Classes="balatro-card" Padding="12" MinWidth="120">
+            <TextBlock Text="&#x1F4F1; Android" HorizontalAlignment="Center"
+                       Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Button Classes="balatro-cta" Content="Transfer Saves"
+            Command="{Binding TransferCommand}" HorizontalAlignment="Center" />
+
+    <StackPanel IsVisible="{Binding IsTransferring}" Spacing="8">
+      <ProgressBar Classes="balatro-progress" Value="{Binding Progress}" Minimum="0" Maximum="100" />
+      <TextBlock Text="{Binding StatusMessage}" Classes="caption" />
+    </StackPanel>
+
+    <Border IsVisible="{Binding Success}" Background="#304ecca3" CornerRadius="8" Padding="16">
+      <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource BalatroSuccessBrush}" />
+    </Border>
+
+    <Border IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Background="#30ff6b6b" CornerRadius="8" Padding="16">
+      <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                 Foreground="{StaticResource BalatroErrorBrush}" />
+    </Border>
+  </StackPanel>
+</UserControl>

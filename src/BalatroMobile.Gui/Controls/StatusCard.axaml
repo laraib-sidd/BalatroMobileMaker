@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BalatroMobile.Gui.Controls.StatusCard">
+  <Border Classes="balatro-card" MinWidth="180">
+    <StackPanel Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Ellipse x:Name="StatusDot" Width="10" Height="10" />
+        <TextBlock x:Name="TitleText" Classes="caption" />
+      </StackPanel>
+      <TextBlock x:Name="ValueText" FontSize="14"
+                 Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+      <TextBlock x:Name="DetailText" Classes="caption"
+                 TextWrapping="Wrap" IsVisible="False" />
+    </StackPanel>
+  </Border>
+</UserControl>

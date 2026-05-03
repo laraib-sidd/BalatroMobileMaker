@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             xmlns:controls="using:BalatroMobile.Gui.Controls"
+             x:Class="BalatroMobile.Gui.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
+
+  <ScrollViewer>
+    <StackPanel Spacing="24" MaxWidth="700">
+
+      <!-- Title -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="&#x1F0CF; BalatroMobile" FontSize="28" FontWeight="Bold"
+                   Foreground="{StaticResource BalatroNeonRedBrush}" />
+        <TextBlock Text="Build modded Balatro for your Android device"
+                   Classes="caption" />
+      </StackPanel>
+
+      <!-- Big Build Button -->
+      <Button Classes="balatro-cta" HorizontalAlignment="Center"
+              Command="{Binding BuildAndInstallCommand}"
+              Margin="0,8">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="&#x1F680;" FontSize="20" VerticalAlignment="Center" />
+          <TextBlock Text="Build &amp; Install" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+
+      <!-- Status Cards Row -->
+      <WrapPanel HorizontalAlignment="Center" Orientation="Horizontal">
+        <controls:StatusCard Title="GAME" Value="{Binding GameValue}"
+                             Status="{Binding GameStatus}"
+                             Detail="{Binding GamePath}" Margin="6" />
+        <controls:StatusCard Title="DEVICE" Value="{Binding DeviceValue}"
+                             Status="{Binding DeviceStatus}" Margin="6" />
+        <controls:StatusCard Title="TOOLS" Value="{Binding ToolsValue}"
+                             Status="{Binding ToolsStatus}" Margin="6" />
+      </WrapPanel>
+
+      <!-- Build Progress (visible during build) -->
+      <controls:ProgressOverlay IsVisible="{Binding IsBuilding}"
+                                 Step="{Binding BuildStep}"
+                                 Progress="{Binding BuildProgress}"
+                                 Detail="{Binding BuildDetail}"
+                                 Error="{Binding BuildError}" />
+
+      <!-- Success message -->
+      <Border IsVisible="{Binding BuildSuccess}"
+              Background="#304ecca3" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="8">
+          <TextBlock Text="&#x2705; Build Complete!" Classes="heading"
+                     Foreground="{StaticResource BalatroSuccessBrush}" />
+          <TextBlock Text="Modded Balatro is installed on your device. Launch and play!"
+                     Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Error message (non-build errors) -->
+      <Border IsVisible="{Binding BuildError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Background="#30ff6b6b" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="8">
+          <TextBlock Text="&#x274C; Build Failed" Classes="heading"
+                     Foreground="{StaticResource BalatroErrorBrush}" />
+          <TextBlock Text="{Binding BuildError}" TextWrapping="Wrap"
+                     Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

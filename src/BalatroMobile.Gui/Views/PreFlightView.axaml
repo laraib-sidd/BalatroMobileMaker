@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             x:Class="BalatroMobile.Gui.Views.PreFlightView"
+             x:DataType="vm:PreFlightViewModel">
+
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="16" Margin="0,0,0,16">
+      <TextBlock Text="🔍 Pre-Flight Checks" FontSize="24" FontWeight="Bold"
+                 Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <Button Classes="balatro-cta" Content="Run All Checks" Command="{Binding RunAllCommand}" />
+        <TextBlock Text="{Binding Summary}" VerticalAlignment="Center"
+                   Foreground="{StaticResource BalatroTextSecondaryBrush}" />
+      </StackPanel>
+    </StackPanel>
+
+    <ScrollViewer>
+      <ItemsControl ItemsSource="{Binding Checks}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:CheckItem">
+            <Border Classes="balatro-card" Margin="0,4">
+              <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding StatusIcon}" FontSize="16" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                             Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+                </StackPanel>
+                <TextBlock Text="{Binding Description}" Classes="caption" Margin="28,0,0,0" />
+                <TextBlock Text="{Binding FixSuggestion}" FontSize="12" Margin="28,4,0,0"
+                           Foreground="{StaticResource BalatroWarningBrush}" TextWrapping="Wrap"
+                           IsVisible="{Binding FixSuggestion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

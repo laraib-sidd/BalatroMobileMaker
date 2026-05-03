@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+        xmlns:rxui="http://reactiveui.net"
+        x:Class="BalatroMobile.Gui.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="BalatroMobile"
+        Width="960" Height="640"
+        MinWidth="800" MinHeight="560"
+        Background="{StaticResource BalatroNavyBrush}"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid ColumnDefinitions="220,*">
+
+    <!-- Sidebar -->
+    <Border Grid.Column="0" Background="{StaticResource BalatroMidnightBrush}">
+      <DockPanel>
+        <!-- Logo area -->
+        <StackPanel DockPanel.Dock="Top" Margin="16,24,16,32">
+          <TextBlock Text="&#x1F0CF;" FontSize="32" HorizontalAlignment="Center" />
+          <TextBlock Text="BalatroMobile" FontSize="20" FontWeight="Bold"
+                     Foreground="{StaticResource BalatroNeonRedBrush}"
+                     HorizontalAlignment="Center" Margin="0,8,0,0" />
+          <TextBlock Text="Mobile Mod Builder" Classes="caption"
+                     HorizontalAlignment="Center" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <!-- Version at bottom -->
+        <TextBlock DockPanel.Dock="Bottom" Text="v2.0.0" Classes="caption"
+                   HorizontalAlignment="Center" Margin="0,0,0,16" />
+
+        <!-- Nav items -->
+        <StackPanel Spacing="2" Margin="8,0">
+          <Button Classes="sidebar-item" Command="{Binding GoHome}">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="&#x1F3E0;" FontSize="16" />
+              <TextBlock Text="Home" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="sidebar-item" Command="{Binding GoMods}">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="&#x1F9E9;" FontSize="16" />
+              <TextBlock Text="Mod Manager" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="sidebar-item" Command="{Binding GoSaveTransfer}">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="&#x1F4BE;" FontSize="16" />
+              <TextBlock Text="Save Transfer" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="sidebar-item" Command="{Binding GoSettings}">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="&#x2699;&#xFE0F;" FontSize="16" />
+              <TextBlock Text="Settings" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="sidebar-item" Command="{Binding GoPreFlight}">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="&#x1F50D;" FontSize="16" />
+              <TextBlock Text="Pre-Flight Checks" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Content area -->
+    <Border Grid.Column="1" Padding="32">
+      <rxui:RoutedViewHost Router="{Binding Router}">
+        <rxui:RoutedViewHost.DefaultContent>
+          <TextBlock Text="Loading..." Foreground="{StaticResource BalatroTextSecondaryBrush}" />
+        </rxui:RoutedViewHost.DefaultContent>
+      </rxui:RoutedViewHost>
+    </Border>
+
+  </Grid>
+</Window>

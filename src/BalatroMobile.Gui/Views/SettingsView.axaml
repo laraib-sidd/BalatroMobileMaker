@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BalatroMobile.Gui.ViewModels"
+             x:Class="BalatroMobile.Gui.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Spacing="24" MaxWidth="500">
+      <TextBlock Text="&#x2699;&#xFE0F; Settings" FontSize="24" FontWeight="Bold"
+                 Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+
+      <Border Classes="balatro-card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="GAME PATH" Classes="caption" />
+          <TextBlock Text="{Binding GamePath}" FontSize="13"
+                     Foreground="{StaticResource BalatroTextPrimaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="balatro-card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="FPS CAP" Classes="caption" />
+          <ComboBox ItemsSource="{Binding FpsOptions}" SelectedIndex="{Binding SelectedFpsIndex}" MinWidth="200" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="balatro-card">
+        <StackPanel Spacing="12">
+          <TextBlock Text="BUILD OPTIONS" Classes="caption" />
+          <CheckBox IsChecked="{Binding EnableLandscape}">
+            <TextBlock Text="Landscape Mode" Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+          </CheckBox>
+          <CheckBox IsChecked="{Binding EnableHighDpi}">
+            <TextBlock Text="High DPI" Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+          </CheckBox>
+          <CheckBox IsChecked="{Binding DisableCrtShader}">
+            <TextBlock Text="Disable CRT Shader" Foreground="{StaticResource BalatroTextPrimaryBrush}" />
+          </CheckBox>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="balatro-card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="TOOLS CACHE" Classes="caption" />
+          <TextBlock Text="{Binding ToolsCachePath}" FontSize="12"
+                     Foreground="{StaticResource BalatroTextSecondaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Button Classes="balatro-secondary" Content="Reset to Defaults"
+              Command="{Binding ResetDefaultsCommand}" HorizontalAlignment="Left" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

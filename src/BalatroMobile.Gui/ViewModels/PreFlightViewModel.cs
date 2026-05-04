@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -63,11 +64,16 @@ public class PreFlightViewModel : ViewModelBase, IActivatableViewModel
 
         var canRun = this.WhenAnyValue(x => x.IsRunning, r => !r);
         RunAllCommand = ReactiveCommand.CreateFromTask(RunAllChecks, canRun);
+        RunAllCommand.ThrownExceptions
+            .Subscribe(ex => { Summary = $"Error: {ex.Message}"; Debug.WriteLine($"PreFlight error: {ex}"); });
 
         this.WhenActivated(disposables =>
         {
             Observable.StartAsync(RunAllChecks)
-                .Subscribe()
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(
+                    _ => { },
+                    ex => Debug.WriteLine($"PreFlight auto-run error: {ex}"))
                 .DisposeWith(disposables);
         });
     }
